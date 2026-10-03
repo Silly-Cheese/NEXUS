@@ -627,41 +627,63 @@ function openCalibration() {
     "<div style='border-top:1px solid #111;width:4in;padding-top:6px;font:11px Arial'>This line should measure exactly 4 inches.</div>" +
     "<div style='border:1px dashed #888;width:1.75in;height:1.1in;display:grid;place-items:center;font:11px Arial;text-align:center'>STANDARD TAG<br>CUT GUIDE</div>" +
     "<p style='font:11px/1.5 Arial;max-width:6in'>Print with paper size <strong>Letter</strong> and scale <strong>100%</strong> or <strong>Actual size</strong>. Disable “Fit to page” if it changes these measurements.</p></div></div>";
-  const body = "<div class='inline-note'>Use this once to confirm your phone/printer is not shrinking NEXUS labels.</div><div class='nexus-print-preview'>" + markup + "</div>";
+  const body = "<div class='inline-note'>Use this once to confirm your phone/printer is not shrinking NEXUS labels. Calibration now opens as a real PDF too.</div><div class='nexus-print-preview'>" + markup + "</div>";
   const modal = N().openModal("Print Calibration", body, {
     wide:true,
-    footer:"<button class='btn btn-secondary' data-close-modal>Close</button><button class='btn btn-primary' id='p3-print-calibration-now'>Print Calibration</button>"
+    footer:"<button class='btn btn-secondary' data-close-modal>Close</button><button class='btn btn-primary' id='p3-print-calibration-now'>Open Calibration PDF</button>"
   });
-  modal.querySelector("#p3-print-calibration-now").addEventListener("click", function () { printMarkup(markup); });
+  modal.querySelector("#p3-print-calibration-now").addEventListener("click", openCalibrationPdf);
 }
 
-function printMarkup(markup) {
-  const old = document.getElementById("nexus-print-root");
-  if (old) old.remove();
-  const root = document.createElement("div");
-  root.id = "nexus-print-root";
-  root.className = "nexus-print-root";
-  root.innerHTML = markup;
-  document.body.appendChild(root);
-  document.body.classList.add("nexus-printing");
+function openCalibrationPdf() {
+  try {
+    if (!window.jspdf || !window.jspdf.jsPDF) throw new Error("PDF library is unavailable.");
+    const jsPDF = window.jspdf.jsPDF;
+    const pdf = new jsPDF({orientation:"portrait",unit:"in",format:"letter"});
+    pdf.setFont("helvetica","bold");
+    pdf.setFontSize(18);
+    pdf.text("NEXUS",.35,.55);
+    pdf.setFont("helvetica","normal");
+    pdf.setFontSize(7);
+    pdf.text("PRINT CALIBRATION",.35,.72);
+    pdf.setDrawColor(200,169,107);
+    pdf.line(.35,.82,8.15,.82);
 
-  let cleaned = false;
-  function cleanup() {
-    if (cleaned) return;
-    cleaned = true;
-    document.body.classList.remove("nexus-printing");
-    const current = document.getElementById("nexus-print-root");
-    if (current) current.remove();
-    window.removeEventListener("afterprint", cleanup);
+    pdf.setDrawColor(17,17,17);
+    pdf.rect(.55,1.2,1,1);
+    pdf.setFontSize(10);
+    pdf.text("1 INCH",1.05,1.73,{align:"center"});
+
+    pdf.line(.55,2.65,4.55,2.65);
+    pdf.setFontSize(9);
+    pdf.text("This line should measure exactly 4 inches.",.55,2.83);
+
+    if (pdf.setLineDashPattern) pdf.setLineDashPattern([.05,.035],0);
+    pdf.rect(.55,3.25,1.75,1.1);
+    if (pdf.setLineDashPattern) pdf.setLineDashPattern([],0);
+    pdf.text("STANDARD TAG",1.425,3.75,{align:"center"});
+    pdf.text("CUT GUIDE",1.425,3.92,{align:"center"});
+
+    pdf.setFontSize(9);
+    const note="Print on US Letter at 100% or Actual Size. Disable Fit to Page if it changes these measurements.";
+    pdf.text(pdf.splitTextToSize(note,6.3),.55,4.8);
+
+    const url=URL.createObjectURL(pdf.output("blob"));
+    const opened=window.open(url,"_blank","noopener");
+    if(!opened){
+      const a=document.createElement("a");
+      a.href=url;
+      a.target="_blank";
+      a.rel="noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    setTimeout(function(){try{URL.revokeObjectURL(url);}catch(_){}},120000);
+  } catch(error) {
+    console.error(error);
+    N().toast("Calibration PDF failed",error.message || "Could not create calibration PDF.","error");
   }
-  window.addEventListener("afterprint", cleanup, {once:true});
-  requestAnimationFrame(function () {
-    requestAnimationFrame(function () {
-      try { window.print(); }
-      catch (error) { cleanup(); N().toast("Printing failed",error.message || "Could not open print dialog.","error"); }
-    });
-  });
-  setTimeout(cleanup,90000);
 }
 
 document.addEventListener("nexus:ready", init);
