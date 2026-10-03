@@ -841,3 +841,66 @@ html {
     display: none;
   }
 }
+
+/* Finder report workflow */
+.public-card-wide {
+  width: min(680px, 100%);
+}
+.public-finder-box {
+  margin-top: 18px;
+  padding: 15px;
+  border: 1px solid rgba(200,169,107,.28);
+  border-radius: 12px;
+  background: rgba(200,169,107,.07);
+}
+.public-finder-box strong {
+  display:block;
+  font-size:14px;
+}
+.public-finder-box p {
+  margin:7px 0 12px;
+  font-size:12px;
+}
+.public-report-actions {
+  justify-content:flex-start;
+  margin-top:16px;
+}
+.public-tag-foot {
+  margin-top:18px;
+  padding-top:12px;
+  border-top:1px solid var(--border-soft);
+}
+.public-honeypot {
+  position:absolute !important;
+  width:1px !important;
+  height:1px !important;
+  overflow:hidden !important;
+  clip:rect(1px,1px,1px,1px) !important;
+  white-space:nowrap !important;
+}
+.finder-report-row .list-main {
+  min-width:0;
+}
+.finder-message {
+  padding:12px 13px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:#101319;
+  color:var(--text);
+  line-height:1.6;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+@media (max-width:620px) {
+  .public-report-actions {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+  .finder-report-row {
+    align-items:flex-start;
+    gap:10px;
+  }
+  .finder-report-row .row-actions {
+    flex-wrap:wrap;
+  }
+}
