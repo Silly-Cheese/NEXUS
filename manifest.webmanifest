@@ -1,15 +1,11 @@
 {
-  "id": "./",
+  "id": "/NEXUS/",
   "name": "NEXUS — Personal Operating System",
   "short_name": "NEXUS",
   "description": "Private personal operating system for receipts, spending, assets, QR tags, locations, and books.",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/NEXUS/",
+  "scope": "/NEXUS/",
   "display": "standalone",
-  "display_override": [
-    "standalone",
-    "minimal-ui"
-  ],
   "background_color": "#0B0D10",
   "theme_color": "#0B0D10",
   "orientation": "any",
@@ -21,19 +17,19 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "/NEXUS/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "/NEXUS/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-maskable-512.png",
+      "src": "/NEXUS/icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
