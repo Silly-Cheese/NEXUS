@@ -399,17 +399,51 @@ function enhanceReceipts() {
   });
 }
 
+function finderReportsOpen() {
+  return state().data.finderReports.filter(function (r) { return r.status === "new" || r.status === "contacted"; });
+}
+
+function finderReportContext(report) {
+  const tag = state().data.qrTags.find(function (t) {
+    return t.publicSlug === report.publicSlug || t.labelCode === report.labelCode || t.id === report.labelCode;
+  });
+  let asset = null, book = null;
+  if (tag && tag.targetType === "asset") asset = assetFor(tag.targetId);
+  if (tag && tag.targetType === "book") book = bookFor(tag.targetId);
+  return {
+    tag: tag,
+    asset: asset,
+    book: book,
+    label: asset ? asset.name : book ? book.title : report.labelCode || "Tagged item"
+  };
+}
+
+function finderReportRow(report) {
+  const ctx = finderReportContext(report);
+  const status = report.status === "contacted" ? statusBadge("CONTACTED","gold") : statusBadge("NEW","red");
+  return "<div class='list-row finder-report-row'><div class='list-main'><div class='list-title'>Finder report · " + esc(ctx.label) +
+    "</div><div class='list-sub'>" + esc(report.reporterName || "Unknown finder") +
+    (report.foundLocation ? " · " + esc(report.foundLocation) : "") + " · " + dateText(report.createdAt) +
+    "</div></div><div class='row-actions'>" + status + button("finder-report","View",{id:report.id},"btn-primary") + "</div></div>";
+}
+
 function enhanceAssets() {
-  injectHeaderButton("<button class='btn btn-secondary' data-p2-action='asset-attention'>◷ Attention</button>");
+  const finderReports = finderReportsOpen();
+  injectHeaderButton("<button class='btn btn-secondary' data-p2-action='asset-attention'>◷ Needs Attention" + (finderReports.length ? " · " + finderReports.length : "") + "</button>");
   if (!document.getElementById("p2-asset-attention")) {
     const returns = returnAlerts().filter(function(x){return x.type==="asset";});
     const warranty = warrantyAlerts();
     const lost = state().data.assets.filter(function(a){return a.lostMode;});
-    const html = "<section id='p2-asset-attention' class='card section-gap'><div class='card-title-row'><div><h2>Asset Attention</h2><div class='microcopy'>Returns, warranties, and lost-item status</div></div></div><div class='grid grid-3'>" +
+    const html = "<section id='p2-asset-attention' class='card section-gap'><div class='card-title-row'><div><h2>Needs Attention</h2><div class='microcopy'>Finder reports, returns, warranties, and lost-item status</div></div>" +
+      (finderReports.length ? statusBadge(finderReports.length + " finder report" + (finderReports.length === 1 ? "" : "s"),"red") : statusBadge("CLEAR","green")) +
+      "</div><div class='grid grid-4'>" +
+      "<div class='insight'><div class='insight-label'>Finder Reports</div><strong>" + finderReports.length + " open</strong><p>Private reports submitted from public QR scans.</p></div>" +
       "<div class='insight'><div class='insight-label'>Returns</div><strong>" + returns.length + " approaching</strong><p>Within the next 21 days.</p></div>" +
       "<div class='insight'><div class='insight-label'>Warranties</div><strong>" + warranty.length + " approaching</strong><p>Within the next 90 days.</p></div>" +
-      "<div class='insight'><div class='insight-label'>Lost Mode</div><strong>" + lost.length + " active</strong><p>Public QR behavior changes while Lost Mode is active.</p></div></div></section>";
-    const stats = document.querySelector("#view .grid.grid-3");
+      "<div class='insight'><div class='insight-label'>Lost Mode</div><strong>" + lost.length + " active</strong><p>Public QR behavior changes while Lost Mode is active.</p></div></div>" +
+      (finderReports.length ? "<div class='divider'></div><div class='card-title-row'><div><h3>Finder reports</h3><div class='microcopy'>Newest open reports</div></div><button class='btn btn-small btn-secondary' data-p2-action='finder-reports'>View all</button></div><div class='panel-list'>" + finderReports.slice(0,5).map(finderReportRow).join("") + "</div>" : "") +
+      "</section>";
+    const stats = document.querySelector("#view .grid.grid-4") || document.querySelector("#view .grid.grid-3");
     if (stats) stats.insertAdjacentHTML("afterend", html);
   }
 
@@ -625,6 +659,17 @@ async function onClick(event) {
     if (action==="research-note") return openResearchNote(btn.dataset.id);
     if (action==="inventory-audit") return openInventoryAudit();
     if (action==="asset-attention") return openAssetAttention();
+    if (action==="finder-reports") return openFinderReports();
+    if (action==="finder-report") return openFinderReport(btn.dataset.id);
+    if (action==="open-report-asset") {
+      n().closeModal();
+      n().setActiveView("assets");
+      setTimeout(function(){
+        const target=document.querySelector("[data-action='edit-asset'][data-id='"+CSS.escape(btn.dataset.id)+"']");
+        if(target) target.scrollIntoView({behavior:"smooth",block:"center"});
+      },80);
+      return;
+    }
   } catch(error) {
     console.error(error);
     n().toast("Phase 2 error",error.message || "Something went wrong.","error");
@@ -814,15 +859,89 @@ function openAssetHistory(assetId) {
 }
 
 function openAssetAttention() {
+  const reports=finderReportsOpen();
   const ret=returnAlerts().filter(function(x){return x.type==="asset";});
   const war=warrantyAlerts();
   const lost=state().data.assets.filter(function(a){return a.lostMode;});
-  const body="<div class='panel-list'>"+
+  const rows=
+    reports.map(finderReportRow).join("")+
     ret.map(function(x){return "<div class='list-row'><div><div class='list-title'>Return · "+esc(x.title)+"</div><div class='list-sub'>"+dateText(x.date)+"</div></div>"+statusBadge(x.days+"d","amber")+"</div>";}).join("")+
     war.map(function(x){return "<div class='list-row'><div><div class='list-title'>Warranty · "+esc(x.title)+"</div><div class='list-sub'>"+dateText(x.date)+"</div></div>"+statusBadge(x.days+"d","amber")+"</div>";}).join("")+
-    lost.map(function(x){return "<div class='list-row'><div><div class='list-title'>Lost Mode · "+esc(x.name)+"</div><div class='list-sub'>Public QR is in lost-item mode.</div></div>"+statusBadge("LOST","red")+"</div>";}).join("")+
+    lost.map(function(x){return "<div class='list-row'><div><div class='list-title'>Lost Mode · "+esc(x.name)+"</div><div class='list-sub'>Public QR is in lost-item mode.</div></div>"+statusBadge("LOST","red")+"</div>";}).join("");
+  const body=rows ? "<div class='panel-list'>"+rows+"</div>" : "<div class='empty-state'><strong>Nothing needs attention</strong><div>No finder reports, approaching deadlines, or lost assets.</div></div>";
+  n().openModal("Needs Attention",body,{wide:true});
+}
+
+function openFinderReports() {
+  const reports = state().data.finderReports.slice().sort(function (a,b) {
+    const av = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+    const bv = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0;
+    return bv-av;
+  });
+  const open = reports.filter(function(r){return r.status==="new"||r.status==="contacted";});
+  const closed = reports.filter(function(r){return r.status==="resolved"||r.status==="dismissed";});
+  const body =
+    "<div class='card-title-row'><div><h3>Open reports</h3><div class='microcopy'>Finder contact information is private to you.</div></div>"+statusBadge(String(open.length),open.length?"red":"green")+"</div>"+
+    (open.length ? "<div class='panel-list'>"+open.map(finderReportRow).join("")+"</div>" : "<div class='empty-state'><strong>No open finder reports</strong><div>New public QR reports will appear here.</div></div>")+
+    (closed.length ? "<div class='divider'></div><details class='p2-details'><summary><strong>Resolved / dismissed</strong><span>"+closed.length+"</span></summary><div class='panel-list'>"+closed.map(function(r){
+      const ctx=finderReportContext(r);
+      return "<div class='list-row'><div><div class='list-title'>"+esc(ctx.label)+"</div><div class='list-sub'>"+esc(r.reporterName||"Finder")+" · "+esc(r.status)+" · "+dateText(r.createdAt)+"</div></div>"+button("finder-report","View",{id:r.id},"btn-ghost")+"</div>";
+    }).join("")+"</div></details>" : "");
+  n().openModal("Finder Reports",body,{wide:true});
+}
+
+function finderContactLinks(report) {
+  const links=[];
+  if(report.contactEmail) links.push("<a class='btn btn-secondary btn-small' href='mailto:"+encodeURIComponent(report.contactEmail)+"'>Email Finder</a>");
+  if(report.contactPhone) {
+    const tel=String(report.contactPhone).replace(/[^0-9+]/g,"");
+    links.push("<a class='btn btn-secondary btn-small' href='tel:"+esc(tel)+"'>Call / Text Finder</a>");
+  }
+  return links.join("");
+}
+
+function openFinderReport(reportId) {
+  const report=byId(state().data.finderReports,reportId);
+  if(!report)return;
+  const ctx=finderReportContext(report);
+  const body=
+    "<div class='grid grid-3'>"+
+      "<div class='insight'><div class='insight-label'>Item</div><strong>"+esc(ctx.label)+"</strong><p>"+esc(report.labelCode||"")+"</p></div>"+
+      "<div class='insight'><div class='insight-label'>Finder</div><strong>"+esc(report.reporterName||"Unknown")+"</strong><p>"+esc(report.status||"new")+"</p></div>"+
+      "<div class='insight'><div class='insight-label'>Reported</div><strong>"+dateText(report.createdAt)+"</strong><p>"+esc(report.foundLocation||"No location provided")+"</p></div>"+
+    "</div><div class='divider'></div>"+
+    "<div class='panel-list'>"+
+      "<div class='list-row'><div><div class='list-title'>Email</div><div class='list-sub'>"+esc(report.contactEmail||"Not provided")+"</div></div></div>"+
+      "<div class='list-row'><div><div class='list-title'>Phone</div><div class='list-sub'>"+esc(report.contactPhone||"Not provided")+"</div></div></div>"+
+      "<div class='list-row'><div><div class='list-title'>Where found / seen</div><div class='list-sub'>"+esc(report.foundLocation||"Not provided")+"</div></div></div>"+
+    "</div><div class='divider'></div><div class='field'><label>Finder message</label><div class='finder-message'>"+esc(report.message||"No message provided.")+"</div></div>"+
+    "<div class='actions' style='justify-content:flex-start;margin-top:16px'>"+finderContactLinks(report)+
+      (ctx.asset ? "<button class='btn btn-secondary btn-small' data-p2-action='open-report-asset' data-id='"+esc(ctx.asset.id)+"'>Open Asset</button>" : "")+
     "</div>";
-  n().openModal("Asset Attention",body||"<div class='empty-state'>Nothing needs attention.</div>",{wide:true});
+  const footer =
+    "<button class='btn btn-secondary' data-close-modal>Close</button>"+
+    (report.status!=="contacted"&&report.status!=="resolved"&&report.status!=="dismissed" ? "<button class='btn btn-secondary' id='finder-mark-contacted'>Mark Contacted</button>" : "")+
+    (report.status!=="dismissed"&&report.status!=="resolved" ? "<button class='btn btn-danger' id='finder-dismiss'>Dismiss</button><button class='btn btn-primary' id='finder-resolve'>Resolve</button>" : "");
+  const modal=n().openModal("Finder Report",body,{wide:true,footer:footer});
+  const contacted=modal.querySelector("#finder-mark-contacted");
+  if(contacted) contacted.onclick=function(){updateFinderReportStatus(report,"contacted");};
+  const dismiss=modal.querySelector("#finder-dismiss");
+  if(dismiss) dismiss.onclick=function(){updateFinderReportStatus(report,"dismissed");};
+  const resolve=modal.querySelector("#finder-resolve");
+  if(resolve) resolve.onclick=function(){updateFinderReportStatus(report,"resolved");};
+}
+
+async function updateFinderReportStatus(report,status) {
+  const patch={status:status,updatedAt:serverTimestamp()};
+  if(status==="contacted") patch.contactedAt=serverTimestamp();
+  if(status==="resolved") patch.resolvedAt=serverTimestamp();
+  if(status==="dismissed") patch.dismissedAt=serverTimestamp();
+  await updateDoc(doc(db(),"finderReports",report.id),patch);
+  await n().writeActivity("asset","Finder report "+status,"finderReport",report.id,report.labelCode+" · "+report.reporterName);
+  n().closeModal();
+  await n().refresh(["finderReports","activity"]);
+  n().toast("Finder report updated","Report marked "+status+".","success");
+  openFinderReports();
 }
 
 function openPrintStudio() {
