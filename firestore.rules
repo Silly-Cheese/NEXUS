@@ -78,6 +78,10 @@ service cloud.firestore {
         && request.resource.data.publicSlug is string
         && request.resource.data.publicSlug.size() > 5
         && request.resource.data.publicSlug.size() <= 64
+        && exists(/databases/$(database)/documents/publicQr/$(request.resource.data.publicSlug))
+        && get(/databases/$(database)/documents/publicQr/$(request.resource.data.publicSlug)).data.status in ['active', 'lost']
+        && get(/databases/$(database)/documents/publicQr/$(request.resource.data.publicSlug)).data.labelCode == request.resource.data.labelCode
+        && get(/databases/$(database)/documents/publicQr/$(request.resource.data.publicSlug)).data.targetType == request.resource.data.targetType
         && request.resource.data.labelCode is string
         && request.resource.data.labelCode.size() <= 32
         && request.resource.data.targetType in ['asset', 'book']
