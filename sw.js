@@ -1,4 +1,4 @@
-const CACHE_NAME = "nexus-shell-v3.1.3";
+const CACHE_NAME = "nexus-shell-v3.1.4";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,11 +6,11 @@ const APP_SHELL = [
   "./app.js?v=3.1.3",
   "./phase2.js?v=3.1.3",
   "./phase3.js?v=3.1.3",
-  "./manifest.webmanifest?v=3.1.3",
+  "./manifest.webmanifest?v=3.1.4",
   "./favicon.svg",
-  "./icon-192.svg",
-  "./icon-512.svg",
-  "./icon-maskable.svg",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./icon-maskable-512.png",
   "./404.html"
 ];
 
