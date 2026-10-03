@@ -582,22 +582,30 @@ async function restoreBackup(payload) {
   }
 
   const tags = Array.isArray(payload.data.qrTags) ? payload.data.qrTags : [];
+  const restoredAssets = Array.isArray(payload.data.assets) ? payload.data.assets : [];
   for (let offset = 0; offset < tags.length; offset += 350) {
     const batch = writeBatch(DB());
     tags.slice(offset, offset + 350).forEach(function (tag) {
       if (!tag.publicSlug) return;
-      const status = tag.status || (tag.targetType === "unassigned" ? "unassigned" : "active");
-      const title = status === "retired" ? "Retired NEXUS Tag" :
-        status === "lost" ? "Lost Registered Property" :
-        status === "unassigned" ? "Unused NEXUS Tag" :
+      const linkedAsset = tag.targetType === "asset" ? restoredAssets.find(function (a) { return a.id === tag.targetId; }) : null;
+      const lost = !!(linkedAsset && linkedAsset.lostMode);
+      const tagStatus = tag.status || (tag.targetType === "unassigned" ? "unassigned" : "assigned");
+      const publicStatus = lost ? "lost" : tagStatus === "assigned" ? "active" : tagStatus;
+      const title = publicStatus === "retired" ? "Retired NEXUS Tag" :
+        publicStatus === "lost" ? "Lost Registered Property" :
+        publicStatus === "unassigned" ? "Unused NEXUS Tag" :
         tag.targetType === "book" ? "Registered Book" :
         tag.targetType === "location" ? "Registered Location" : "Registered Personal Property";
+      const message = publicStatus === "unassigned" ? "This tag is ready to be assigned." :
+        publicStatus === "lost" ? (linkedAsset.lostPublicMessage || "This item has been reported lost.") :
+        publicStatus === "retired" ? "This tag is no longer active." :
+        "This QR tag belongs to a private NEXUS installation.";
       batch.set(doc(DB(),"publicQr",tag.publicSlug), {
         labelCode:tag.labelCode || tag.id,
         targetType:tag.targetType || "unassigned",
-        status:status === "assigned" ? "active" : status,
+        status:publicStatus,
         publicTitle:title,
-        publicMessage:status === "unassigned" ? "This tag is ready to be assigned." : "This QR tag belongs to a private NEXUS installation.",
+        publicMessage:message,
         updatedAt:serverTimestamp()
       }, {merge:true});
     });
