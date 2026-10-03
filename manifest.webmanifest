@@ -1,0 +1,11 @@
+{
+  "name": "NEXUS — Personal Operating System",
+  "short_name": "NEXUS",
+  "description": "Private personal operating system for receipts, spending, assets, QR tags, locations, and books.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0B0D10",
+  "theme_color": "#0B0D10",
+  "orientation": "any",
+  "categories": ["productivity", "utilities", "finance"]
+}
