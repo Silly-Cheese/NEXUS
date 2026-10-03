@@ -319,6 +319,39 @@ function groupSum(items, key) {
   }, {});
 }
 
+function categorySpendingForMonth(key) {
+  const totals = {};
+  function add(category, amount) {
+    const name = category || "Other";
+    totals[name] = (totals[name] || 0) + Number(amount || 0);
+  }
+
+  state.data.transactions
+    .filter(function (t) { return (t.type || "expense") === "expense" && monthKey(t.date) === key && !t.sourceReceiptId; })
+    .forEach(function (t) { add(t.category, t.amount); });
+
+  state.data.receipts
+    .filter(function (r) { return monthKey(r.date) === key; })
+    .forEach(function (r) {
+      const items = r.items || [];
+      if (items.length) {
+        let itemTotal = 0;
+        items.forEach(function (item) {
+          const value = Number(item.price || 0);
+          itemTotal += value;
+          add(item.category, value);
+        });
+        const remainder = Number(r.total || 0) - itemTotal;
+        if (remainder > 0.01) add("Other", remainder);
+      } else {
+        const linked = state.data.transactions.find(function (t) { return t.sourceReceiptId === r.id; });
+        add(linked && linked.category || "Other", r.total);
+      }
+    });
+
+  return totals;
+}
+
 function categoryBars(groups) {
   const entries = Object.entries(groups).sort(function (a, b) { return b[1] - a[1]; });
   if (!entries.length) return emptyState("No spending yet", "Add a transaction or scan a receipt to see category distribution.");
