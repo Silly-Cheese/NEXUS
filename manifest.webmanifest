@@ -7,5 +7,17 @@
   "background_color": "#0B0D10",
   "theme_color": "#0B0D10",
   "orientation": "any",
-  "categories": ["productivity", "utilities", "finance"]
+  "categories": [
+    "productivity",
+    "utilities",
+    "finance"
+  ],
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }
