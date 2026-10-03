@@ -331,7 +331,7 @@ function parseMoneyToken(token) {
 }
 
 function moneyTokens(line) {
-  const matches = String(line || "").match(/[-(]?\s*\$?\s*[\dOoIl]{1,7}(?:,\d{3})*(?:\.\d{2})\)?/g) || [];
+  const matches = String(line || "").match(/[-(]?\s*\$?\s*[\dOoIlBSG]{1,7}(?:,\d{3})*(?:\.\d{2})\)?/g) || [];
   return matches.map(parseMoneyToken).filter(function (x) { return x !== null; });
 }
 
@@ -467,11 +467,15 @@ function extractItems(lines) {
     const values = moneyTokens(line);
     if (!values.length) return;
     const price = values[values.length - 1];
-    let name = line.replace(/[-(]?\s*\$?\s*[\dOoIl]{1,7}(?:,\d{3})*(?:\.\d{2})\)?(?:\s*[A-Z]{1,2})?\s*$/i, "").trim();
+    let name = line.replace(/[-(]?\s*\$?\s*[\dOoIlBSG]{1,7}(?:,\d{3})*(?:\.\d{2})\)?(?:\s*[A-Z]{1,2})?\s*$/i, "").trim();
     if ((!name || name.length < 2) && index > 0 && !moneyTokens(lines[index - 1]).length && !isMetadataLine(lines[index - 1])) {
       name = lines[index - 1];
     }
-    name = cleanLine(name).replace(/^[*#~]+\s*/, "").replace(/\s+[A-Z]\s*$/i, "").trim();
+    name = cleanLine(name)
+      .replace(/^[*#~]+\s*/, "")
+      .replace(/^\d+\s+(?=[A-Za-z])/, "")
+      .replace(/\s+[A-Z]\s*$/i, "")
+      .trim();
     if (!name || name.length < 2 || /^\d+$/.test(name) || isMetadataLine(name)) return;
     if (!Number.isFinite(price) || Math.abs(price) > 100000) return;
     const key = norm(name) + "|" + Number(price).toFixed(2);
@@ -587,6 +591,18 @@ function scoreCandidate(parsed) {
   return Math.max(0, Math.min(100, score));
 }
 
+function merchantCandidateScore(candidate) {
+  const merchant = cleanLine(candidate && candidate.merchant || "");
+  if (!merchant) return -100;
+  const letters = (merchant.match(/[A-Za-z]/g) || []).length;
+  const noise = (merchant.match(/[^A-Za-z0-9 &'’.-]/g) || []).length;
+  let score = letters * 2 - noise * 7 - Math.max(0, merchant.length - 42);
+  if (/\bbraums?\b|\bwalmart\b|\btarget\b|\bmcdonald|\bchick\s*fil\s*a\b/i.test(norm(merchant))) score += 80;
+  if (candidate && candidate.scanMeta && candidate.scanMeta.pass === "Header") score += 14;
+  if (moneyTokens(merchant).length) score -= 35;
+  return score;
+}
+
 function bestCandidate(candidates) {
   candidates.forEach(function (candidate) {
     const ocr = Number(candidate.scanMeta.ocrConfidence || 0);
@@ -601,6 +617,13 @@ function bestCandidate(candidates) {
     scanMeta: Object.assign({}, ranked[0].scanMeta),
     items: (ranked[0].items || []).slice()
   });
+
+  const bestMerchantCandidate = ranked.slice().sort(function (a, b) {
+    return merchantCandidateScore(b) - merchantCandidateScore(a);
+  })[0];
+  if (bestMerchantCandidate && merchantCandidateScore(bestMerchantCandidate) > 3) {
+    best.merchant = canonicalMerchant(bestMerchantCandidate.merchant);
+  }
 
   ranked.forEach(function (candidate) {
     if ((!best.merchant || norm(best.merchant).length < 3) && candidate.merchant) best.merchant = candidate.merchant;
