@@ -407,14 +407,23 @@ function finderReportContext(report) {
   const tag = state().data.qrTags.find(function (t) {
     return t.publicSlug === report.publicSlug || t.labelCode === report.labelCode || t.id === report.labelCode;
   });
-  let asset = null, book = null;
+  let asset = null, book = null, location = null;
   if (tag && tag.targetType === "asset") asset = assetFor(tag.targetId);
   if (tag && tag.targetType === "book") book = bookFor(tag.targetId);
+  if (tag && tag.targetType === "location") location = byId(state().data.locations, tag.targetId);
+  const label = asset ? asset.name :
+    book ? book.title :
+    location ? (n().locationName(location.id) || location.name) :
+    tag && tag.targetLabel ? tag.targetLabel :
+    report.labelCode || "Tagged item";
   return {
     tag: tag,
     asset: asset,
     book: book,
-    label: asset ? asset.name : book ? book.title : report.labelCode || "Tagged item"
+    location: location,
+    targetType: tag ? tag.targetType : report.targetType || "tag",
+    targetId: tag ? tag.targetId : null,
+    label: label
   };
 }
 
@@ -661,11 +670,18 @@ async function onClick(event) {
     if (action==="asset-attention") return openAssetAttention();
     if (action==="finder-reports") return openFinderReports();
     if (action==="finder-report") return openFinderReport(btn.dataset.id);
-    if (action==="open-report-asset") {
+    if (action==="open-report-record") {
+      const type=btn.dataset.type;
+      const id=btn.dataset.id;
       n().closeModal();
-      n().setActiveView("assets");
+      const view=type==="book" ? "library" : type==="location" ? "locations" : "assets";
+      n().setActiveView(view);
       setTimeout(function(){
-        const target=document.querySelector("[data-action='edit-asset'][data-id='"+CSS.escape(btn.dataset.id)+"']");
+        let selector="";
+        if(type==="asset") selector="[data-action='edit-asset'][data-id='"+CSS.escape(id)+"']";
+        else if(type==="book") selector="[data-action='edit-book'][data-id='"+CSS.escape(id)+"']";
+        else if(type==="location") selector="[data-action='edit-location'][data-id='"+CSS.escape(id)+"']";
+        const target=selector ? document.querySelector(selector) : null;
         if(target) target.scrollIntoView({behavior:"smooth",block:"center"});
       },80);
       return;
@@ -916,7 +932,7 @@ function openFinderReport(reportId) {
       "<div class='list-row'><div><div class='list-title'>Where found / seen</div><div class='list-sub'>"+esc(report.foundLocation||"Not provided")+"</div></div></div>"+
     "</div><div class='divider'></div><div class='field'><label>Finder message</label><div class='finder-message'>"+esc(report.message||"No message provided.")+"</div></div>"+
     "<div class='actions' style='justify-content:flex-start;margin-top:16px'>"+finderContactLinks(report)+
-      (ctx.asset ? "<button class='btn btn-secondary btn-small' data-p2-action='open-report-asset' data-id='"+esc(ctx.asset.id)+"'>Open Asset</button>" : "")+
+      (ctx.targetId ? "<button class='btn btn-secondary btn-small' data-p2-action='open-report-record' data-id='"+esc(ctx.targetId)+"' data-type='"+esc(ctx.targetType)+"'>Open "+esc(ctx.targetType === "book" ? "Book" : ctx.targetType === "location" ? "Location" : ctx.targetType === "asset" ? "Asset" : "Record")+"</button>" : "")+
     "</div>";
   const footer =
     "<button class='btn btn-secondary' data-close-modal>Close</button>"+
