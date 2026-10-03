@@ -425,6 +425,8 @@ function enhanceAssets() {
     const lostClass = asset.lostMode ? "btn-primary" : "btn-ghost";
     actions.insertAdjacentHTML("beforeend",
       button("toggle-lost",lostLabel,{id:id},lostClass) +
+      button("asset-return","Return",{id:id},"btn-ghost") +
+      (asset.sourceReceiptId ? button("linked-receipt","Receipt",{id:asset.sourceReceiptId},"btn-ghost") : "") +
       button("asset-history","History",{id:id},"btn-ghost")
     );
     const details = [];
@@ -484,9 +486,11 @@ function enhanceLibrary() {
     const actions = row.querySelector(".row-actions");
     if (!actions) return;
     actions.setAttribute("data-p2-book-actions","");
+    const book = bookFor(edit.dataset.id);
     actions.insertAdjacentHTML("beforeend",
       button("reading-log","Reading",{id:edit.dataset.id},"btn-ghost") +
-      button("research-note","Note",{id:edit.dataset.id},"btn-ghost")
+      button("research-note","Note",{id:edit.dataset.id},"btn-ghost") +
+      (book && book.sourceReceiptId ? button("linked-receipt","Receipt",{id:book.sourceReceiptId},"btn-ghost") : "")
     );
   });
 }
@@ -610,6 +614,8 @@ async function onClick(event) {
     if (action==="price-history") return openPriceHistory(btn.dataset.key);
     if (action==="toggle-lost") return toggleLost(btn.dataset.id);
     if (action==="asset-history") return openAssetHistory(btn.dataset.id);
+    if (action==="asset-return") return openAssetReturn(btn.dataset.id);
+    if (action==="linked-receipt") return n().openReceiptDetail(receiptFor(btn.dataset.id));
     if (action==="print-studio") return openPrintStudio();
     if (action==="reset-tag") return resetTag(btn.dataset.code);
     if (action==="retire-tag") return retireTag(btn.dataset.code);
@@ -773,6 +779,28 @@ async function toggleLost(assetId) {
   await n().writeActivity("asset",next?"Lost Mode activated":"Asset marked found","asset",asset.id,asset.name);
   await n().refresh(["assets","activity","qrTags"]);
   n().toast(next?"Lost Mode active":"Asset recovered",next?"Public QR scans now show the lost-item message.":"The QR returned to normal public mode.","success");
+}
+
+function openAssetReturn(assetId) {
+  const asset=assetFor(assetId);
+  if(!asset)return;
+  const body="<form id='p2-asset-return' class='form-grid'><div class='field'><label>Return deadline</label><input name='returnDeadline' type='date' value='"+esc(asset.returnDeadline||"")+"'></div>"+
+    "<div class='field'><label>Status</label><select name='returnStatus'><option value='open' "+(asset.returnStatus!=="closed"?"selected":"")+">Open</option><option value='closed' "+(asset.returnStatus==="closed"?"selected":"")+">Closed / keep item</option></select></div>"+
+    "<div class='field full'><label>Return note</label><textarea name='returnNote'>"+esc(asset.returnNote||"")+"</textarea></div></form>";
+  const modal=n().openModal(asset.name+" · Return Tracking",body,{footer:"<button class='btn btn-secondary' data-close-modal>Cancel</button><button class='btn btn-primary' id='p2-save-asset-return'>Save</button>"});
+  modal.querySelector("#p2-save-asset-return").onclick=async function(){
+    const form=modal.querySelector("#p2-asset-return");
+    await updateDoc(doc(db(),"assets",asset.id),{
+      returnDeadline:form.elements.returnDeadline.value,
+      returnStatus:form.elements.returnStatus.value,
+      returnNote:form.elements.returnNote.value.trim(),
+      updatedAt:serverTimestamp()
+    });
+    await n().writeActivity("asset","Return tracking updated","asset",asset.id,asset.name);
+    n().closeModal();
+    await n().refresh(["assets","activity"]);
+    n().toast("Return tracking saved","NEXUS will surface the deadline when it approaches.","success");
+  };
 }
 
 function openAssetHistory(assetId) {
