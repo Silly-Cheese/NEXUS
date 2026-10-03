@@ -5,7 +5,9 @@ import {
 const P3 = {
   N: null,
   initialized: false,
-  restorePayload: null
+  restorePayload: null,
+  installPrompt: null,
+  installed: false
 };
 
 function N() { return P3.N || window.NEXUS; }
@@ -21,8 +23,22 @@ function init() {
   P3.N = window.NEXUS;
   P3.initialized = true;
 
+  P3.installed = isStandalone();
   installCommandButton();
   installNetworkStatus();
+  installInstallButton();
+  window.addEventListener("beforeinstallprompt", function (event) {
+    event.preventDefault();
+    P3.installPrompt = event;
+    installInstallButton();
+    refreshInstallButton();
+  });
+  window.addEventListener("appinstalled", function () {
+    P3.installPrompt = null;
+    P3.installed = true;
+    refreshInstallButton();
+    if (N()) N().toast("NEXUS installed", "NEXUS is now available as an app.", "success");
+  });
   document.addEventListener("nexus:render", function (event) {
     enhance(event.detail && event.detail.view || S().view);
   });
@@ -42,6 +58,53 @@ function installCommandButton() {
   quick.insertAdjacentHTML("beforebegin",
     "<button id='p3-command-launch' class='btn btn-secondary p3-command-launch' type='button' title='Command Palette (Ctrl/⌘ K)'>⌘</button>");
   document.getElementById("p3-command-launch").addEventListener("click", openCommandPalette);
+}
+
+function isStandalone() {
+  return window.matchMedia && window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true;
+}
+
+function installInstallButton() {
+  if (document.getElementById("p3-install-btn")) return;
+  const topbar = document.querySelector(".topbar");
+  const command = document.getElementById("p3-command-launch");
+  if (!topbar) return;
+  const button = document.createElement("button");
+  button.id = "p3-install-btn";
+  button.className = "btn btn-secondary p3-install-btn hidden";
+  button.type = "button";
+  button.setAttribute("data-p3-action","install-app");
+  button.innerHTML = "<span class='p3-install-icon'>⇩</span><span class='p3-install-text'>Install</span>";
+  button.title = "Install NEXUS";
+  topbar.insertBefore(button, command || null);
+}
+
+function refreshInstallButton() {
+  const button = document.getElementById("p3-install-btn");
+  if (!button) return;
+  const canInstall = !!P3.installPrompt && !P3.installed && !isStandalone();
+  button.classList.toggle("hidden", !canInstall);
+}
+
+async function promptInstall() {
+  if (isStandalone() || P3.installed) {
+    N().toast("Already installed", "NEXUS is already running as an installed app.", "success");
+    return;
+  }
+  if (!P3.installPrompt) {
+    N().toast("Install not ready", "Chrome has not exposed the install prompt yet. Reload NEXUS once after the latest GitHub Pages update, then use the browser Install option or try again.", "error");
+    return;
+  }
+  const promptEvent = P3.installPrompt;
+  P3.installPrompt = null;
+  refreshInstallButton();
+  await promptEvent.prompt();
+  const choice = await promptEvent.userChoice;
+  if (choice && choice.outcome !== "accepted") {
+    P3.installPrompt = promptEvent;
+    refreshInstallButton();
+  }
 }
 
 function installNetworkStatus() {
@@ -69,6 +132,8 @@ function updateNetworkStatus() {
 function enhance(view) {
   installCommandButton();
   installNetworkStatus();
+  installInstallButton();
+  refreshInstallButton();
   if (view === "settings") enhanceSettings();
   if (view === "receipts") enhanceReceipts();
   if (view === "qr") enhanceQr();
@@ -171,7 +236,12 @@ function enhanceSettings() {
       "<div class='panel-list'><div class='list-row'><div><div class='list-title'>Current site</div><div class='list-sub'>" + esc(N().appBaseUrl()) + "</div></div></div>" +
       "<div class='list-row'><div><div class='list-title'>Firebase role</div><div class='list-sub'>Authentication + Cloud Firestore only. Website files are served by GitHub Pages.</div></div></div></div>" +
       (location.hostname.endsWith("github.io") ? "<div class='inline-note' style='margin-top:12px'>Firebase Authentication must list <strong>" + esc(location.hostname) + "</strong> under Authentication → Settings → Authorized domains. This is a one-time Firebase provider setting, not NEXUS account creation.</div>" : "") +
-    "</section>";
+    "</section>" +
+    "<section class='card section-gap'><div class='card-title-row'><div><h2>Installed App</h2><div class='microcopy'>Progressive Web App status</div></div>" +
+      (isStandalone() || P3.installed ? "<span class='badge green'>INSTALLED</span>" : P3.installPrompt ? "<span class='badge gold'>READY</span>" : "<span class='badge'>CHECKING</span>") +
+    "</div><p class='muted'>NEXUS can run from your Android home screen in its own standalone app window.</p><div class='actions' style='justify-content:flex-start;margin-top:12px'>" +
+      (isStandalone() || P3.installed ? "<button class='btn btn-secondary' disabled>Installed</button>" : "<button class='btn btn-primary' data-p3-action='install-app'>Install NEXUS</button>") +
+    "</div></section>";
   document.getElementById("view").insertAdjacentHTML("beforeend", html);
 }
 
@@ -294,6 +364,7 @@ function handleGlobalClick(event) {
   if (action === "restore-backup") openRestoreBackup();
   if (action === "edit-receipt") openReceiptEditor(el.dataset.id);
   if (action === "print-calibration") openCalibration();
+  if (action === "install-app") promptInstall();
 }
 
 function openHealthCenter() {
