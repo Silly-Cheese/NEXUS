@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0B0D10" />
   <meta name="description" content="NEXUS — private personal operating system for money, receipts, assets, QR tags, locations, and books." />
-  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />\n  <link rel="shortcut icon" href="favicon.svg" />\n  <link rel="manifest" href="manifest.webmanifest" />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="styles.css?v=3.1.1" />
+  <link rel="stylesheet" href="styles.css?v=3.1.2" />
   <title>NEXUS</title>
 </head>
 <body>
@@ -28,7 +28,7 @@
   <div id="public-scan" class="public-scan hidden"></div>
 
   <div id="app-shell" class="app-shell hidden">
-    <aside class="sidebar">
+    <aside id="nexus-sidebar" class="sidebar">
       <div class="brand-block">
         <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
         <div>
@@ -56,7 +56,11 @@
 
     <main class="workspace">
       <header class="topbar">
-        <button id="mobile-menu" class="icon-btn mobile-only" aria-label="Open menu">☰</button>
+        <button id="mobile-menu" class="icon-btn mobile-only mobile-menu-btn" aria-label="Open navigation" aria-expanded="false" aria-controls="nexus-sidebar" type="button">
+          <svg class="mobile-menu-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 7h14M5 12h14M5 17h14" />
+          </svg>
+        </button>
         <div class="global-search-wrap">
           <span class="search-icon">⌕</span>
           <input id="global-search" type="search" placeholder="Search anything in NEXUS…" autocomplete="off" />
@@ -90,7 +94,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
-  <script type="module" src="app.js?v=3.1.1"></script>\n  <script type="module" src="phase2.js?v=3.1.1"></script>
-  <script type="module" src="phase3.js?v=3.1.1"></script>
+  <script type="module" src="app.js?v=3.1.2"></script>\n  <script type="module" src="phase2.js?v=3.1.2"></script>
+  <script type="module" src="phase3.js?v=3.1.2"></script>
 </body>
 </html>
