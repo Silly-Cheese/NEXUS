@@ -177,7 +177,10 @@ function render() {
   const fn = renderers[state.view] || renderDashboard;
   $("#view").innerHTML = fn();
   bindViewActions();
-  setTimeout(afterRender, 0);
+  setTimeout(function () {
+    afterRender();
+    document.dispatchEvent(new CustomEvent("nexus:render", { detail: { view: state.view } }));
+  }, 0);
 }
 
 function viewHeader(eyebrow, title, subtitle, actions) {
@@ -1542,6 +1545,9 @@ window.NEXUS = {
   targetLabel: targetLabel,
   locationName: locationName,
   tagFor: tagFor,
+  createTagForEntity: createTagForEntity,
+  randomSlug: randomSlug,
+  reserveCounter: reserveCounter,
   money: money,
   dateText: dateText,
   normalize: normalize,
