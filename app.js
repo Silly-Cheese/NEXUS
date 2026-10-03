@@ -669,9 +669,12 @@ function renderQrCards() {
   });
 }
 
+function appBaseUrl() {
+  return new URL("./", window.location.href).href.split("#")[0].split("?")[0];
+}
+
 function qrUrl(tag) {
-  const base = location.origin + location.pathname;
-  return base + "?tag=" + encodeURIComponent(tag.publicSlug || tag.id);
+  return appBaseUrl() + "?tag=" + encodeURIComponent(tag.publicSlug || tag.id);
 }
 
 function bindViewActions() {
@@ -1165,20 +1168,61 @@ function openAssignTag(code) {
 function makeQrDataUrl(text, size) {
   return new Promise(function (resolve, reject) {
     try {
+      if (!window.QRCode) return reject(new Error("QR library is unavailable."));
       const bin = $("#qr-render-bin");
+      if (!bin) return reject(new Error("QR render surface is unavailable."));
       const holder = document.createElement("div");
       bin.innerHTML = "";
       bin.appendChild(holder);
-      new window.QRCode(holder, { text: text, width: size, height: size, colorDark: "#000000", colorLight: "#ffffff", correctLevel: window.QRCode.CorrectLevel.M });
-      setTimeout(function () {
+      new window.QRCode(holder, {
+        text: text,
+        width: size,
+        height: size,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: window.QRCode.CorrectLevel.M
+      });
+
+      const started = Date.now();
+      (function waitForQr() {
         const canvas = holder.querySelector("canvas");
         const img = holder.querySelector("img");
-        if (canvas) resolve(canvas.toDataURL("image/png"));
-        else if (img && img.src) resolve(img.src);
-        else reject(new Error("QR render failed"));
-      }, 30);
-    } catch (error) { reject(error); }
+        if (canvas) {
+          try { return resolve(canvas.toDataURL("image/png")); }
+          catch (error) { return reject(error); }
+        }
+        if (img && img.src) {
+          if (img.complete) return resolve(img.src);
+          img.onload = function () { resolve(img.src); };
+          img.onerror = function () { reject(new Error("QR image failed to load.")); };
+          return;
+        }
+        if (Date.now() - started > 3500) return reject(new Error("QR rendering timed out."));
+        requestAnimationFrame(waitForQr);
+      })();
+    } catch (error) {
+      reject(error);
+    }
   });
+}
+
+function printableTagMarkup(entry) {
+  const t = entry.tag;
+  const isContainer = t.size === "container";
+  const cls = isContainer ? "nexus-paper-tag container" : "nexus-paper-tag " + escapeHtml(t.size || "standard");
+  if (isContainer) {
+    return "<div class='" + cls + "'><img src='" + entry.data + "' alt='QR code'><div class='nexus-paper-copy'><div class='nexus-paper-brand'>NEXUS</div><div class='nexus-paper-label'>" +
+      escapeHtml(targetLabel(t)) + "</div><div class='nexus-paper-code'>" + escapeHtml(t.labelCode || t.id) + "</div><div class='nexus-paper-kind'>" +
+      escapeHtml((t.targetType || "UNASSIGNED").toUpperCase()) + "</div></div></div>";
+  }
+  return "<div class='" + cls + "'><img src='" + entry.data + "' alt='QR code'><div class='nexus-paper-code'>" +
+    escapeHtml(t.labelCode || t.id) + "</div><div class='nexus-paper-kind'>" +
+    escapeHtml((t.status === "unassigned" ? "UNASSIGNED" : t.targetType || "NEXUS").toUpperCase()) + "</div></div>";
+}
+
+function printableSheetMarkup(ready) {
+  return "<div class='nexus-print-document'><div class='nexus-paper-head'><div><div class='nexus-paper-title'>NEXUS</div><div class='nexus-paper-sub'>QR TAG SHEET</div></div><div class='nexus-paper-motto'>ORGANIZE · TRACK · FIND · KEEP</div></div><div class='nexus-paper-grid'>" +
+    ready.map(printableTagMarkup).join("") + "</div></div>";
 }
 
 async function printTags(tags) {
@@ -1186,29 +1230,62 @@ async function printTags(tags) {
     toast("Nothing to print", "Generate or select a QR tag first.", "error");
     return;
   }
-  const win = window.open("", "_blank");
-  if (!win) {
-    toast("Pop-up blocked", "Allow pop-ups for NEXUS to open the printable sheet.", "error");
+
+  toast("Preparing labels", "Rendering QR codes inside NEXUS…");
+  const ready = [];
+  try {
+    for (const tag of tags) {
+      ready.push({ tag: tag, data: await makeQrDataUrl(qrUrl(tag), 360) });
+    }
+  } catch (error) {
+    console.error(error);
+    toast("Could not prepare labels", error.message || "QR rendering failed.", "error");
     return;
   }
-  win.document.write("<title>NEXUS QR Sheet</title><body style='font-family:Arial;padding:30px'>Preparing NEXUS QR sheet…</body>");
-  const ready = [];
-  for (const tag of tags) ready.push({ tag: tag, data: await makeQrDataUrl(qrUrl(tag), 320) });
-  const css = "@page{size:letter;margin:.35in}*{box-sizing:border-box}body{margin:0;color:#111;font-family:Arial,sans-serif}.head{display:flex;justify-content:space-between;align-items:end;border-bottom:2px solid #c8a96b;padding:0 0 14px;margin-bottom:16px}.head h1{margin:0;letter-spacing:.22em;font-size:25px}.head p{margin:0;font-size:9px;letter-spacing:.15em}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.tag{border:1px dashed #aaa;min-height:1.55in;padding:10px;text-align:center;display:grid;place-items:center;align-content:center;break-inside:avoid}.tag.tiny{min-height:1.25in}.tag.container{grid-column:span 2;min-height:1.9in;grid-template-columns:1.2in 1fr;text-align:left}.tag img{width:.82in;height:.82in;image-rendering:pixelated}.tag.container img{width:1.05in;height:1.05in}.code{font-weight:700;letter-spacing:.12em;font-size:10px;margin-top:6px}.kind{font-size:7px;letter-spacing:.18em;color:#666;margin-top:4px}.container .code{font-size:14px}.container .kind{font-size:8px}.label{font-weight:700;margin:4px 0;font-size:14px}@media print{.no-print{display:none}}";
-  const labels = ready.map(function (entry) {
-    const t = entry.tag;
-    const cls = t.size === "container" ? "tag container" : "tag " + escapeHtml(t.size || "standard");
-    if (t.size === "container") {
-      return "<div class='" + cls + "'><img src='" + entry.data + "'><div><div style='font-size:8px;letter-spacing:.18em'>NEXUS</div><div class='label'>" +
-        escapeHtml(targetLabel(t)) + "</div><div class='code'>" + escapeHtml(t.labelCode || t.id) + "</div><div class='kind'>" + escapeHtml((t.targetType || "UNASSIGNED").toUpperCase()) + "</div></div></div>";
-    }
-    return "<div class='" + cls + "'><img src='" + entry.data + "'><div class='code'>" + escapeHtml(t.labelCode || t.id) + "</div><div class='kind'>" +
-      escapeHtml((t.status === "unassigned" ? "UNASSIGNED" : t.targetType || "NEXUS").toUpperCase()) + "</div></div>";
-  }).join("");
-  win.document.open();
-  win.document.write("<!doctype html><html><head><meta charset='utf-8'><title>NEXUS QR Tag Sheet</title><style>" + css + "</style></head><body><div class='head'><div><h1>NEXUS</h1><p>QR TAG SHEET</p></div><p>ORGANIZE · TRACK · FIND · KEEP</p></div><div class='grid'>" +
-    labels + "</div><script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>");
-  win.document.close();
+
+  const sheet = printableSheetMarkup(ready);
+  const body = "<div class='inline-note'>This preview is rendered inside NEXUS. On Android, tap <strong>Print / Save PDF</strong> below—NEXUS no longer opens an <code>about:blank</code> tab.</div>" +
+    "<div class='nexus-print-preview'>" + sheet + "</div>";
+  const modal = openModal("QR Print Preview", body, {
+    wide: true,
+    footer: "<button class='btn btn-secondary' data-close-modal>Close</button><button class='btn btn-primary' id='nexus-print-now'>Print / Save PDF</button>"
+  });
+
+  $("#nexus-print-now", modal).addEventListener("click", function () {
+    let root = document.getElementById("nexus-print-root");
+    if (root) root.remove();
+    root = document.createElement("div");
+    root.id = "nexus-print-root";
+    root.className = "nexus-print-root";
+    root.innerHTML = sheet;
+    document.body.appendChild(root);
+
+    document.body.classList.add("nexus-printing");
+    let cleaned = false;
+    const cleanup = function () {
+      if (cleaned) return;
+      cleaned = true;
+      document.body.classList.remove("nexus-printing");
+      const current = document.getElementById("nexus-print-root");
+      if (current) current.remove();
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup, { once: true });
+
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        try {
+          window.print();
+        } catch (error) {
+          cleanup();
+          console.error(error);
+          toast("Printing failed", "Your browser could not open its print dialog.", "error");
+        }
+      });
+    });
+
+    setTimeout(cleanup, 90000);
+  });
 }
 
 function openBookForm(existing, prefillIsbn) {
@@ -1504,20 +1581,61 @@ async function doGoogleSignIn() {
   }
 }
 
+function ownerLoadingMarkup(message) {
+  return "<section class='card nexus-boot-card'><div class='nexus-loader' aria-hidden='true'></div><div><div class='eyebrow'>NEXUS</div><h2>" +
+    escapeHtml(message || "Loading your system…") + "</h2><p class='muted'>Connecting securely to Cloud Firestore.</p></div></section>";
+}
+
+function timeoutPromise(ms, label) {
+  return new Promise(function (_, reject) {
+    setTimeout(function () { reject(new Error(label || "Request timed out.")); }, ms);
+  });
+}
+
+async function loadOwnerDataWithRecovery() {
+  $("#view").innerHTML = ownerLoadingMarkup("Loading your data…");
+  try {
+    await Promise.race([loadAll(), timeoutPromise(18000, "Firestore took too long to respond.")]);
+    return true;
+  } catch (error) {
+    console.error("NEXUS startup load failed", error);
+    $("#view").innerHTML =
+      "<section class='card nexus-recovery'><div class='eyebrow'>CONNECTION ISSUE</div><h2>NEXUS could not finish loading.</h2><p>" +
+      escapeHtml(friendlyError(error)) + "</p><div class='actions' style='justify-content:flex-start;margin-top:16px'><button id='retry-owner-load' class='btn btn-primary'>Retry</button><button id='recovery-signout' class='btn btn-secondary'>Sign out</button></div><div class='inline-note' style='margin-top:16px'>If this is the first GitHub Pages deployment, make sure <strong>silly-cheese.github.io</strong> is listed in Firebase Authentication → Authorized domains and that the included Firestore rules have been deployed.</div></section>";
+    $("#retry-owner-load").addEventListener("click", loadOwnerDataWithRecovery);
+    $("#recovery-signout").addEventListener("click", function () { signOut(auth); });
+    return false;
+  }
+}
+
 async function startOwnerSession(user) {
   state.user = user;
   $("#auth-gate").classList.add("hidden");
   $("#public-scan").classList.add("hidden");
   $("#app-shell").classList.remove("hidden");
   $("#owner-chip").innerHTML = "<strong style='color:var(--text)'>Owner</strong><br>" + escapeHtml(user.email || "");
-  await setDoc(doc(db, "users", user.uid), {
-    email: user.email, displayName: user.displayName || "NEXUS Owner", role: "owner",
-    lastLoginAt: serverTimestamp(), updatedAt: serverTimestamp()
-  }, { merge: true });
-  await loadAll();
+
+  try {
+    await Promise.race([
+      setDoc(doc(db, "users", user.uid), {
+        email: user.email,
+        displayName: user.displayName || "NEXUS Owner",
+        role: "owner",
+        lastLoginAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true }),
+      timeoutPromise(12000, "Owner profile connection timed out.")
+    ]);
+  } catch (error) {
+    console.warn("Owner profile sync deferred", error);
+  }
+
+  const loaded = await loadOwnerDataWithRecovery();
+  if (!loaded) return;
+
   if (state.pendingTag) {
     const slug = state.pendingTag;
-    history.replaceState({}, "", location.pathname);
+    history.replaceState({}, "", appBaseUrl());
     state.pendingTag = null;
     await openOwnerTag(slug);
   }
@@ -1548,6 +1666,9 @@ window.NEXUS = {
   createTagForEntity: createTagForEntity,
   randomSlug: randomSlug,
   reserveCounter: reserveCounter,
+  loadAll: loadAll,
+  loadOwnerDataWithRecovery: loadOwnerDataWithRecovery,
+  appBaseUrl: appBaseUrl,
   money: money,
   dateText: dateText,
   normalize: normalize,
