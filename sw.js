@@ -6,7 +6,7 @@ const APP_SHELL = [
   "./app.js?v=3.1.3",
   "./phase2.js?v=3.1.3",
   "./phase3.js?v=3.1.3",
-  "./manifest.webmanifest",
+  "./manifest.webmanifest?v=3.1.3",
   "./favicon.svg",
   "./icon-192.svg",
   "./icon-512.svg",
