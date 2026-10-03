@@ -48,6 +48,59 @@ service cloud.firestore {
       allow read, write: if isOwner();
     }
 
+    match /finderReports/{reportId} {
+      allow create: if request.resource.data.keys().hasOnly([
+          'publicSlug',
+          'labelCode',
+          'targetType',
+          'reporterName',
+          'contactEmail',
+          'contactPhone',
+          'foundLocation',
+          'message',
+          'consentToContact',
+          'status',
+          'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'publicSlug',
+          'labelCode',
+          'targetType',
+          'reporterName',
+          'contactEmail',
+          'contactPhone',
+          'foundLocation',
+          'message',
+          'consentToContact',
+          'status',
+          'createdAt'
+        ])
+        && request.resource.data.publicSlug is string
+        && request.resource.data.publicSlug.size() > 5
+        && request.resource.data.publicSlug.size() <= 64
+        && request.resource.data.labelCode is string
+        && request.resource.data.labelCode.size() <= 32
+        && request.resource.data.targetType in ['asset', 'book']
+        && request.resource.data.reporterName is string
+        && request.resource.data.reporterName.size() > 0
+        && request.resource.data.reporterName.size() <= 100
+        && request.resource.data.contactEmail is string
+        && request.resource.data.contactEmail.size() <= 200
+        && request.resource.data.contactPhone is string
+        && request.resource.data.contactPhone.size() <= 60
+        && (request.resource.data.contactEmail.size() > 0 || request.resource.data.contactPhone.size() > 0)
+        && request.resource.data.foundLocation is string
+        && request.resource.data.foundLocation.size() <= 300
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 2000
+        && request.resource.data.consentToContact == true
+        && request.resource.data.status == 'new'
+        && request.resource.data.createdAt == request.time;
+
+      allow read, update, delete: if isOwner();
+    }
+
     match /meta/{document=**} {
       allow read, write: if isOwner();
     }
