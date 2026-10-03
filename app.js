@@ -439,7 +439,7 @@ function assetCard(a) {
 function renderQr() {
   const tags = state.data.qrTags;
   const unassigned = tags.filter(function (t) { return t.status === "unassigned" || t.targetType === "unassigned"; });
-  const assigned = tags.length - unassigned.length;
+  const assigned = tags.filter(function (t) { return t.status === "assigned"; }).length;
   return viewHeader("QR REGISTRY", "Physical Tags", "Print on normal letter paper, cut on the guides, tape the tag on, and scan it later.",
     "<button class='btn btn-secondary' data-action='print-unassigned'>▤ Print Unassigned</button><button class='btn btn-primary' data-action='generate-tags'>＋ Generate Blank Tags</button>") +
     "<div class='grid grid-3'>" +
@@ -456,7 +456,7 @@ function renderQr() {
 function qrCard(tag) {
   const target = targetLabel(tag);
   return "<article class='entity-card qr-card' data-search='" + escapeHtml(normalize([tag.labelCode, target, tag.targetType, tag.status].join(" "))) + "'><div class='entity-top'><span class='badge " +
-    ((tag.status === "unassigned" || tag.targetType === "unassigned") ? "amber" : "green") + "'>" + escapeHtml((tag.status || "assigned").toUpperCase()) + "</span><span class='microcopy'>" +
+    ((tag.status === "retired") ? "red" : (tag.status === "unassigned" || tag.targetType === "unassigned") ? "amber" : "green") + "'>" + escapeHtml((tag.status || "assigned").toUpperCase()) + "</span><span class='microcopy'>" +
     escapeHtml(tag.size || "standard") + "</span></div><div class='qr-box' id='qr-" + escapeHtml(tag.id.replace(/[^a-zA-Z0-9_-]/g, "")) + "'></div><div class='qr-label-code'>" +
     escapeHtml(tag.labelCode || tag.id) + "</div><div class='entity-sub' style='margin-top:5px'>" + escapeHtml(target) + "</div><div class='row-actions' style='justify-content:center;margin-top:12px'>" +
     ((tag.status === "unassigned" || tag.targetType === "unassigned") ? "<button class='btn btn-small btn-primary' data-action='assign-tag' data-code='" + escapeHtml(tag.id) + "'>Assign</button>" : "") +
@@ -1472,7 +1472,7 @@ async function showPublicTag(slug) {
       return;
     }
     const data = snap.data();
-    panel.innerHTML = "<div class='public-card'><div class='public-brand'>NEXUS</div><span class='badge " + (data.status === "unassigned" ? "amber" : "green") + "'>" +
+    panel.innerHTML = "<div class='public-card'><div class='public-brand'>NEXUS</div><span class='badge " + (data.status === "lost" ? "red" : data.status === "unassigned" || data.status === "retired" ? "amber" : "green") + "'>" +
       escapeHtml(String(data.status || "registered").toUpperCase()) + "</span><h1 style='margin-top:14px'>" + escapeHtml(data.publicTitle || "Registered Property") +
       "</h1><p>" + escapeHtml(data.publicMessage || "This item is registered to a private owner.") + "</p><div class='divider'></div><div class='microcopy'>Tag " +
       escapeHtml(data.labelCode || "") + "</div><button id='public-owner-signin' class='btn btn-secondary' style='margin-top:16px'>Owner sign in</button></div>";
