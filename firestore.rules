@@ -84,7 +84,9 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/publicQr/$(request.resource.data.publicSlug)).data.targetType == request.resource.data.targetType
         && request.resource.data.labelCode is string
         && request.resource.data.labelCode.size() <= 32
-        && request.resource.data.targetType in ['asset', 'book']
+        && request.resource.data.targetType is string
+        && request.resource.data.targetType.size() > 0
+        && request.resource.data.targetType.size() <= 40
         && request.resource.data.reporterName is string
         && request.resource.data.reporterName.size() > 0
         && request.resource.data.reporterName.size() <= 100
