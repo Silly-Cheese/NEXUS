@@ -24,7 +24,7 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
 
-const COLLECTIONS = ["transactions", "receipts", "assets", "qrTags", "books", "locations", "activity", "loans"];
+const COLLECTIONS = ["transactions", "receipts", "assets", "qrTags", "books", "locations", "activity", "loans", "finderReports"];
 const CATEGORIES = [
   "Groceries", "Dining", "Transportation", "Books", "Electronics", "Household",
   "Personal Care", "Education", "Entertainment", "Subscriptions", "Medical", "Gifts", "Other"
@@ -423,12 +423,14 @@ function renderAssets() {
     const diff = new Date(a.warrantyExpiration + "T12:00:00") - new Date();
     return diff >= 0 && diff <= 1000 * 60 * 60 * 24 * 60;
   }).length;
+  const finderAttention = state.data.finderReports.filter(function (r) { return r.status === "new" || r.status === "contacted"; }).length;
   return viewHeader("ASSETS", "Physical Registry", "Keep the important things you own connected to receipts, locations, warranties, and QR tags.",
     "<button class='btn btn-primary' data-action='add-asset'>＋ Register Asset</button>") +
-    "<div class='grid grid-3'>" +
+    "<div class='grid grid-4'>" +
       statCard("▣", "Assets", String(assets.length), countTagged("asset") + " tagged") +
       statCard("◇", "Recorded purchase value", money(totalValue), "Based on entered purchase prices") +
       statCard("◷", "Warranty attention", String(expiring), expiring ? "Expire within 60 days" : "Nothing expiring soon") +
+      statCard("!", "Finder reports", String(finderAttention), finderAttention ? "Needs your attention" : "No open finder reports") +
     "</div>" +
     "<section class='section-gap'><div class='card-title-row'><div><h2>Registered items</h2><div class='microcopy'>Your physical inventory</div></div><input id='asset-filter' class='toolbar-input' placeholder='Filter assets…'></div>" +
       (assets.length ? "<div id='asset-grid' class='asset-grid'>" + assets.map(assetCard).join("") + "</div>" : "<div class='card'>" + emptyState("No assets registered", "Add something important enough to locate, document, or tag.") + "</div>") +
@@ -1722,14 +1724,85 @@ async function showPublicTag(slug) {
       return;
     }
     const data = snap.data();
+    const reportable = (data.targetType === "asset" || data.targetType === "book") &&
+      data.status !== "unassigned" && data.status !== "retired";
     panel.innerHTML = "<div class='public-card'><div class='public-brand'>NEXUS</div><span class='badge " + (data.status === "lost" ? "red" : data.status === "unassigned" || data.status === "retired" ? "amber" : "green") + "'>" +
       escapeHtml(String(data.status || "registered").toUpperCase()) + "</span><h1 style='margin-top:14px'>" + escapeHtml(data.publicTitle || "Registered Property") +
-      "</h1><p>" + escapeHtml(data.publicMessage || "This item is registered to a private owner.") + "</p><div class='divider'></div><div class='microcopy'>Tag " +
-      escapeHtml(data.labelCode || "") + "</div><button id='public-owner-signin' class='btn btn-secondary' style='margin-top:16px'>Owner sign in</button></div>";
+      "</h1><p>" + escapeHtml(data.publicMessage || "This item is registered to a private owner.") + "</p>" +
+      (reportable ? "<div class='public-finder-box'><strong>" + (data.status === "lost" ? "Found this item?" : "Think this item may be missing from its owner?") +
+        "</strong><p>You can privately send your contact information to the owner. Your details are not shown publicly.</p><button id='public-report-item' class='btn btn-primary' type='button'>" +
+        (data.status === "lost" ? "I Found This Item" : "Report This Item to Owner") + "</button></div>" : "") +
+      "<div class='divider'></div><div class='microcopy'>Tag " + escapeHtml(data.labelCode || "") +
+      "</div><button id='public-owner-signin' class='btn btn-secondary' style='margin-top:16px' type='button'>Owner sign in</button></div>";
     $("#public-owner-signin").addEventListener("click", doGoogleSignIn);
+    if (reportable && $("#public-report-item")) {
+      $("#public-report-item").addEventListener("click", function () {
+        showFinderReportForm(slug, data);
+      });
+    }
   } catch (error) {
     panel.innerHTML = "<div class='public-card'><div class='public-brand'>NEXUS</div><h1>Unable to read tag</h1><p>" + escapeHtml(friendlyError(error)) + "</p></div>";
   }
+}
+
+function showFinderReportForm(slug, tagData) {
+  const panel = $("#public-scan");
+  panel.innerHTML =
+    "<div class='public-card public-card-wide'><div class='public-brand'>NEXUS</div><div class='eyebrow'>PRIVATE FINDER REPORT</div>" +
+    "<h1>Contact the owner</h1><p>If you found this item, or believe it may be missing from its owner, send a private report below. NEXUS does not reveal the owner's identity or contact information.</p>" +
+    "<form id='public-finder-form' class='form-grid'>" +
+      "<div class='field full'><label>Your name</label><input name='reporterName' maxlength='100' required autocomplete='name' placeholder='Your name'></div>" +
+      "<div class='field'><label>Email</label><input name='contactEmail' type='email' maxlength='200' autocomplete='email' placeholder='you@example.com'></div>" +
+      "<div class='field'><label>Phone</label><input name='contactPhone' type='tel' maxlength='60' autocomplete='tel' placeholder='Optional'></div>" +
+      "<div class='field full'><label>Where did you find / see it?</label><input name='foundLocation' maxlength='300' placeholder='Example: school library, front desk, parking lot'></div>" +
+      "<div class='field full'><label>Message</label><textarea name='message' maxlength='2000' required placeholder='Tell the owner anything that would help them recover the item.'></textarea></div>" +
+      "<div class='field public-honeypot' aria-hidden='true'><label>Website</label><input name='website' tabindex='-1' autocomplete='off'></div>" +
+      "<label class='check-row full'><input name='consent' type='checkbox' required> I agree that the NEXUS owner may use the contact information above only to follow up about this item.</label>" +
+      "<div class='field full'><div class='inline-note'>At least an email address or phone number is required. Your report is stored privately and can only be read by the NEXUS owner.</div></div>" +
+    "</form><div class='actions public-report-actions'><button id='public-report-back' class='btn btn-secondary' type='button'>Back</button><button id='public-submit-report' class='btn btn-primary' type='button'>Send Private Report</button></div>" +
+    "<div class='microcopy public-tag-foot'>Tag " + escapeHtml(tagData.labelCode || "") + "</div></div>";
+
+  $("#public-report-back").addEventListener("click", function () { showPublicTag(slug); });
+  $("#public-submit-report").addEventListener("click", async function () {
+    const form = $("#public-finder-form");
+    if (!form.reportValidity()) return;
+    if (form.elements.website.value) return;
+    const email = form.elements.contactEmail.value.trim();
+    const phone = form.elements.contactPhone.value.trim();
+    if (!email && !phone) {
+      form.elements.contactEmail.setCustomValidity("Enter an email address or phone number.");
+      form.elements.contactEmail.reportValidity();
+      form.elements.contactEmail.setCustomValidity("");
+      return;
+    }
+    const submit = $("#public-submit-report");
+    submit.disabled = true;
+    submit.textContent = "Sending…";
+    try {
+      await addDoc(collection(db, "finderReports"), {
+        publicSlug: String(slug).slice(0, 64),
+        labelCode: String(tagData.labelCode || "").slice(0, 32),
+        targetType: String(tagData.targetType || "asset").slice(0, 20),
+        reporterName: form.elements.reporterName.value.trim().slice(0, 100),
+        contactEmail: email.slice(0, 200),
+        contactPhone: phone.slice(0, 60),
+        foundLocation: form.elements.foundLocation.value.trim().slice(0, 300),
+        message: form.elements.message.value.trim().slice(0, 2000),
+        consentToContact: true,
+        status: "new",
+        createdAt: serverTimestamp()
+      });
+      panel.innerHTML =
+        "<div class='public-card'><div class='public-brand'>NEXUS</div><span class='badge green'>REPORT SENT</span><h1 style='margin-top:14px'>Thank you.</h1>" +
+        "<p>Your private report was sent to the owner and placed in their Needs Attention queue. They can use the contact information you provided to follow up with you.</p>" +
+        "<div class='divider'></div><div class='microcopy'>Tag " + escapeHtml(tagData.labelCode || "") + "</div></div>";
+    } catch (error) {
+      console.error(error);
+      submit.disabled = false;
+      submit.textContent = "Send Private Report";
+      toast("Could not send report", friendlyError(error), "error");
+    }
+  });
 }
 
 async function doGoogleSignIn() {
