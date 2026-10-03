@@ -1858,7 +1858,7 @@ $("#quick-add").addEventListener("click", openQuickAdd);
 $("#mobile-menu").addEventListener("click", function () {
   setMobileNavOpen(!$(".sidebar").classList.contains("open"));
 });
-$("#sidebar-backdrop").addEventListener("click", function () { setMobileNavOpen(false); });
+if ($("#sidebar-backdrop")) $("#sidebar-backdrop").addEventListener("click", function () { setMobileNavOpen(false); });
 
 $$("[data-view]").forEach(function (btn) {
   btn.addEventListener("click", function () { setActiveView(btn.dataset.view); });
