@@ -822,3 +822,22 @@ html {
     height: 38px;
   }
 }
+
+.p3-install-btn {
+  white-space: nowrap;
+}
+.p3-install-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+@media (max-width: 820px) {
+  .p3-install-btn {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    padding: 0;
+  }
+  .p3-install-text {
+    display: none;
+  }
+}
