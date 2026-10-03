@@ -1724,14 +1724,12 @@ async function showPublicTag(slug) {
       return;
     }
     const data = snap.data();
-    const reportable = (data.targetType === "asset" || data.targetType === "book") &&
-      data.status !== "unassigned" && data.status !== "retired";
+    const reportable = data.status !== "unassigned" && data.status !== "retired";
     panel.innerHTML = "<div class='public-card'><div class='public-brand'>NEXUS</div><span class='badge " + (data.status === "lost" ? "red" : data.status === "unassigned" || data.status === "retired" ? "amber" : "green") + "'>" +
       escapeHtml(String(data.status || "registered").toUpperCase()) + "</span><h1 style='margin-top:14px'>" + escapeHtml(data.publicTitle || "Registered Property") +
       "</h1><p>" + escapeHtml(data.publicMessage || "This item is registered to a private owner.") + "</p>" +
-      (reportable ? "<div class='public-finder-box'><strong>" + (data.status === "lost" ? "Found this item?" : "Think this item may be missing from its owner?") +
-        "</strong><p>You can privately send your contact information to the owner. Your details are not shown publicly.</p><button id='public-report-item' class='btn btn-primary' type='button'>" +
-        (data.status === "lost" ? "I Found This Item" : "Report This Item to Owner") + "</button></div>" : "") +
+      (reportable ? "<div class='public-finder-box'><strong>Found this tagged property?</strong>" +
+        "<p>You can report it to the owner whether or not they have marked it missing. Your contact information is sent privately to the owner and is never shown publicly.</p><button id='public-report-item' class='btn btn-primary' type='button'>Report Found</button></div>" : "") +
       "<div class='divider'></div><div class='microcopy'>Tag " + escapeHtml(data.labelCode || "") +
       "</div><button id='public-owner-signin' class='btn btn-secondary' style='margin-top:16px' type='button'>Owner sign in</button></div>";
     $("#public-owner-signin").addEventListener("click", doGoogleSignIn);
@@ -1749,7 +1747,7 @@ function showFinderReportForm(slug, tagData) {
   const panel = $("#public-scan");
   panel.innerHTML =
     "<div class='public-card public-card-wide'><div class='public-brand'>NEXUS</div><div class='eyebrow'>PRIVATE FINDER REPORT</div>" +
-    "<h1>Contact the owner</h1><p>If you found this item, or believe it may be missing from its owner, send a private report below. NEXUS does not reveal the owner's identity or contact information.</p>" +
+    "<h1>Report it found</h1><p>Send the owner a private finder report. The owner does not need to have marked this tag missing first, and NEXUS does not reveal the owner's identity or contact information.</p>" +
     "<form id='public-finder-form' class='form-grid'>" +
       "<div class='field full'><label>Your name</label><input name='reporterName' maxlength='100' required autocomplete='name' placeholder='Your name'></div>" +
       "<div class='field'><label>Email</label><input name='contactEmail' type='email' maxlength='200' autocomplete='email' placeholder='you@example.com'></div>" +
@@ -1782,7 +1780,7 @@ function showFinderReportForm(slug, tagData) {
       await addDoc(collection(db, "finderReports"), {
         publicSlug: String(slug).slice(0, 64),
         labelCode: String(tagData.labelCode || "").slice(0, 32),
-        targetType: String(tagData.targetType || "asset").slice(0, 20),
+        targetType: String(tagData.targetType || "tag").slice(0, 40),
         reporterName: form.elements.reporterName.value.trim().slice(0, 100),
         contactEmail: email.slice(0, 200),
         contactPhone: phone.slice(0, 60),
