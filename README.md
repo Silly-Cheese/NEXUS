@@ -33,23 +33,40 @@ NEXUS intentionally uses only:
 
 There is no Firebase Storage dependency. Receipt images are OCR-processed on the device and are not uploaded or persisted by NEXUS.
 
-## First deployment
+## Deployment
 
-The owner account does not need to be manually created in Firestore.
+NEXUS is hosted as a static site with **GitHub Pages**. Firebase is used only for Authentication and Cloud Firestore.
 
-1. In Firebase Authentication, enable the **Google** sign-in provider.
-2. Create/enable the Cloud Firestore database if it does not already exist.
-3. Make sure the domain you deploy to is listed as an authorized Authentication domain.
-4. Install/login to the Firebase CLI if needed.
-5. From this repository, deploy:
+### GitHub Pages
+
+For this repository, use GitHub Pages from the `main` branch and the repository root.
+
+The expected default Pages URL is:
+
+`https://silly-cheese.github.io/NEXUS/`
+
+The repository includes `.nojekyll` and a GitHub Pages-friendly `404.html` fallback. QR URLs are generated from the live site base path, so they continue to work when NEXUS is hosted from the `/NEXUS/` repository path.
+
+### Firebase Authentication
+
+1. Enable the **Google** sign-in provider.
+2. Under Firebase Authentication → Settings → Authorized domains, add:
+   `silly-cheese.github.io`
+3. No NEXUS account document, owner code, or UID setup is required.
+
+On first successful sign-in with `christophershelley257@gmail.com`, NEXUS recognizes the account automatically and creates/merges the owner profile itself.
+
+### Firestore rules
+
+Deploy only the Firestore rules from this repository:
 
 ```bash
-firebase deploy --only hosting,firestore:rules
+firebase deploy --only firestore:rules
 ```
 
-The repository is already bound to Firebase project `nexus-5fd52`.
+The repository remains bound to Firebase project `nexus-5fd52`.
 
-On first successful sign-in with `christophershelley257@gmail.com`, NEXUS creates/merges the owner's profile automatically. Firestore authorization is based on the verified Firebase Auth email claim, so the owner profile document is not required in advance.
+NEXUS does **not** use Firebase Hosting.
 
 ## Security model
 
@@ -118,3 +135,96 @@ Phase 2 turns the original modules into a connected personal operating system.
 - Move all scanned Assets/Books into a chosen location in one batch
 
 Phase 2 still uses only Firebase Authentication and Cloud Firestore. It adds no Firebase Storage dependency and introduces no additional Firebase service requirement.
+
+
+## Phase 3
+
+Phase 3 is the audit, reliability, recovery, and final-polish pass.
+
+### Mobile QR printing fix
+
+The old popup-based print workflow has been removed.
+
+NEXUS now:
+
+- renders every QR code inside the active NEXUS page
+- shows a full in-app print preview
+- waits for all QR images to finish rendering
+- invokes the browser print dialog only after the user taps **Print / Save PDF**
+- never depends on an `about:blank` popup
+- includes a print-calibration sheet for ordinary US Letter paper
+
+This specifically addresses mobile Chrome hanging forever on **Preparing NEXUS QR sheet…**.
+
+### Reliability
+
+- explicit startup loading screen
+- 18-second Firestore startup timeout
+- retry screen instead of an infinite loading state
+- owner profile sync timeout protection
+- online/offline indicator
+- GitHub Pages-aware QR base URLs
+- GitHub Pages fallback routing
+
+### Data Health
+
+NEXUS now audits itself for:
+
+- orphan QR tags
+- receipt links pointing to missing Assets or Books
+- duplicate ISBNs
+- duplicate serial numbers
+- Assets without locations
+- Books without locations
+- return windows that have passed
+- expired warranties
+
+Safe broken-link issues can be repaired automatically without deleting valid records.
+
+### Backup recovery
+
+Settings now supports:
+
+- JSON export
+- JSON restore
+- merge-based recovery by original Firestore document ID
+- automatic restoration of public QR records
+- QR counter recovery after import
+
+Restore never performs a destructive database wipe.
+
+### Receipt correction
+
+Saved receipts can now be edited after confirmation, including:
+
+- merchant
+- date
+- subtotal
+- tax
+- total
+- payment note
+- line-item names
+- line-item prices
+- line-item categories
+
+When a receipt is corrected, its linked spending transaction is synchronized automatically.
+
+### Command Palette
+
+Use **Ctrl/⌘ + K** or the command button in the top bar to quickly open:
+
+- Dashboard
+- Money
+- Receipts
+- Assets
+- QR Registry
+- Library
+- Locations
+- Settings
+- Scanner
+- Data Health
+- Backup Restore
+
+Anything else can be sent directly to NEXUS Search.
+
+Phase 3 still uses only Firebase Authentication and Cloud Firestore.
