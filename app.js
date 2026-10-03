@@ -147,11 +147,20 @@ async function refresh(names) {
   render();
 }
 
+function setMobileNavOpen(open) {
+  const sidebar = $(".sidebar");
+  const button = $("#mobile-menu");
+  if (!sidebar || !button) return;
+  sidebar.classList.toggle("open", !!open);
+  button.setAttribute("aria-expanded", open ? "true" : "false");
+  button.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+}
+
 function setActiveView(name) {
   state.view = name;
   $$(".nav-item[data-view]").forEach(function (btn) { btn.classList.toggle("active", btn.dataset.view === name); });
   $$(".mobile-nav [data-view]").forEach(function (btn) { btn.classList.toggle("active", btn.dataset.view === name); });
-  $(".sidebar").classList.remove("open");
+  setMobileNavOpen(false);
   render();
 }
 
@@ -1810,6 +1819,7 @@ window.NEXUS = {
   refresh: refresh,
   render: render,
   setActiveView: setActiveView,
+  setMobileNavOpen: setMobileNavOpen,
   openModal: openModal,
   closeModal: closeModal,
   toast: toast,
@@ -1845,7 +1855,10 @@ $("#google-signin").addEventListener("click", doGoogleSignIn);
 $("#global-scan").addEventListener("click", function () { openScanner(); });
 $("#mobile-scan").addEventListener("click", function () { openScanner(); });
 $("#quick-add").addEventListener("click", openQuickAdd);
-$("#mobile-menu").addEventListener("click", function () { $(".sidebar").classList.toggle("open"); });
+$("#mobile-menu").addEventListener("click", function () {
+  setMobileNavOpen(!$(".sidebar").classList.contains("open"));
+});
+$("#sidebar-backdrop").addEventListener("click", function () { setMobileNavOpen(false); });
 
 $$("[data-view]").forEach(function (btn) {
   btn.addEventListener("click", function () { setActiveView(btn.dataset.view); });
@@ -1869,6 +1882,7 @@ document.addEventListener("keydown", function (event) {
     $("#global-search").focus();
   }
   if (event.key === "Escape" && !$("#modal-backdrop").classList.contains("hidden")) closeModal();
+  else if (event.key === "Escape" && $(".sidebar").classList.contains("open")) setMobileNavOpen(false);
 });
 
 setPersistence(auth, browserLocalPersistence).catch(function () {});
