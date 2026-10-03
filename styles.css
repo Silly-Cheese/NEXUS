@@ -1195,3 +1195,8 @@ html {
   font-size:11px;
   line-height:1.5;
 }
+
+.smart-reconcile-card.missing .smart-reconcile-result strong,
+.smart-reconcile-card.missing .smart-reconcile-result span {
+  color: var(--muted);
+}
