@@ -1225,17 +1225,168 @@ function printableSheetMarkup(ready) {
     ready.map(printableTagMarkup).join("") + "</div></div>";
 }
 
+function qrPdfDimensions(size) {
+  if (size === "tiny") return { colspan: 1, height: 1.18, qr: .68 };
+  if (size === "book") return { colspan: 1, height: 1.52, qr: .82 };
+  if (size === "container") return { colspan: 2, height: 1.82, qr: 1.00 };
+  return { colspan: 1, height: 1.46, qr: .80 };
+}
+
+function buildQrPdf(ready) {
+  if (!window.jspdf || !window.jspdf.jsPDF) throw new Error("PDF library is unavailable.");
+  const jsPDF = window.jspdf.jsPDF;
+  const pdf = new jsPDF({ orientation: "portrait", unit: "in", format: "letter", compress: true });
+
+  const pageW = 8.5;
+  const pageH = 11;
+  const margin = .35;
+  const usableW = pageW - margin * 2;
+  const gap = .08;
+  const colW = (usableW - gap * 3) / 4;
+  const bodyTop = 1.02;
+  const bodyBottom = pageH - .35;
+  let xCol = 0;
+  let y = bodyTop;
+  let rowH = 0;
+
+  function header() {
+    pdf.setTextColor(17,17,17);
+    pdf.setFont("helvetica","bold");
+    pdf.setFontSize(18);
+    pdf.text("NEXUS", margin, .55);
+    pdf.setFont("helvetica","normal");
+    pdf.setFontSize(7);
+    pdf.text("QR TAG SHEET", margin, .72);
+    pdf.setDrawColor(200,169,107);
+    pdf.setLineWidth(.015);
+    pdf.line(margin, .82, pageW - margin, .82);
+    pdf.setTextColor(70,70,70);
+    pdf.setFontSize(6.5);
+    pdf.text("ORGANIZE  ·  TRACK  ·  FIND  ·  KEEP", pageW - margin, .55, { align: "right" });
+  }
+
+  function newPage() {
+    pdf.addPage("letter","portrait");
+    header();
+    xCol = 0;
+    y = bodyTop;
+    rowH = 0;
+  }
+
+  function nextRow() {
+    y += rowH + gap;
+    xCol = 0;
+    rowH = 0;
+  }
+
+  function ensureRoom(height) {
+    if (y + height <= bodyBottom) return;
+    newPage();
+  }
+
+  function drawDashedRect(x, top, w, h) {
+    pdf.setDrawColor(165,165,165);
+    pdf.setLineWidth(.008);
+    if (pdf.setLineDashPattern) pdf.setLineDashPattern([.05,.035], 0);
+    pdf.rect(x, top, w, h);
+    if (pdf.setLineDashPattern) pdf.setLineDashPattern([], 0);
+  }
+
+  function tagText(t) {
+    const kind = (t.status === "unassigned" ? "UNASSIGNED" : t.targetType || "NEXUS").toUpperCase();
+    return { code: t.labelCode || t.id, kind: kind, label: targetLabel(t) };
+  }
+
+  header();
+
+  ready.forEach(function (entry) {
+    const t = entry.tag;
+    const dims = qrPdfDimensions(t.size || "standard");
+    if (xCol + dims.colspan > 4) nextRow();
+    ensureRoom(dims.height);
+
+    const x = margin + xCol * (colW + gap);
+    const w = dims.colspan === 2 ? colW * 2 + gap : colW;
+    const top = y;
+    drawDashedRect(x, top, w, dims.height);
+
+    const txt = tagText(t);
+
+    if (dims.colspan === 2) {
+      const qrX = x + .12;
+      const qrY = top + (dims.height - dims.qr) / 2;
+      pdf.addImage(entry.data, "PNG", qrX, qrY, dims.qr, dims.qr, undefined, "FAST");
+
+      const textX = qrX + dims.qr + .16;
+      const textW = w - (textX - x) - .12;
+      pdf.setTextColor(35,35,35);
+      pdf.setFont("helvetica","bold");
+      pdf.setFontSize(6);
+      pdf.text("NEXUS", textX, top + .38);
+      pdf.setFontSize(11);
+      const labelLines = pdf.splitTextToSize(String(txt.label || "Registered item"), textW);
+      pdf.text(labelLines.slice(0,2), textX, top + .63);
+      const codeY = top + .63 + Math.min(labelLines.length,2) * .17 + .12;
+      pdf.setFontSize(9);
+      pdf.text(String(txt.code), textX, codeY);
+      pdf.setFont("helvetica","normal");
+      pdf.setFontSize(6);
+      pdf.setTextColor(95,95,95);
+      pdf.text(String(txt.kind), textX, codeY + .17);
+    } else {
+      const qrX = x + (w - dims.qr) / 2;
+      const qrY = top + .13;
+      pdf.addImage(entry.data, "PNG", qrX, qrY, dims.qr, dims.qr, undefined, "FAST");
+
+      pdf.setTextColor(25,25,25);
+      pdf.setFont("helvetica","bold");
+      pdf.setFontSize(7.6);
+      pdf.text(String(txt.code), x + w / 2, qrY + dims.qr + .16, { align: "center" });
+      pdf.setFont("helvetica","normal");
+      pdf.setFontSize(5.5);
+      pdf.setTextColor(100,100,100);
+      pdf.text(String(txt.kind), x + w / 2, qrY + dims.qr + .29, { align: "center" });
+    }
+
+    rowH = Math.max(rowH, dims.height);
+    xCol += dims.colspan;
+    if (xCol >= 4) nextRow();
+  });
+
+  pdf.setProperties({
+    title: "NEXUS QR Tag Sheet",
+    subject: "Printable NEXUS QR labels",
+    creator: "NEXUS"
+  });
+  return pdf;
+}
+
+function openPdfBlob(blobUrl) {
+  const opened = window.open(blobUrl, "_blank", "noopener");
+  if (opened) return true;
+
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  return true;
+}
+
 async function printTags(tags) {
   if (!tags || !tags.length) {
     toast("Nothing to print", "Generate or select a QR tag first.", "error");
     return;
   }
 
-  toast("Preparing labels", "Rendering QR codes inside NEXUS…");
+  toast("Preparing labels", "Rendering the printable PDF…");
   const ready = [];
   try {
     for (const tag of tags) {
-      ready.push({ tag: tag, data: await makeQrDataUrl(qrUrl(tag), 360) });
+      ready.push({ tag: tag, data: await makeQrDataUrl(qrUrl(tag), 420) });
     }
   } catch (error) {
     console.error(error);
@@ -1243,48 +1394,58 @@ async function printTags(tags) {
     return;
   }
 
+  let pdf;
+  try {
+    pdf = buildQrPdf(ready);
+  } catch (error) {
+    console.error(error);
+    toast("PDF generation failed", error.message || "Could not create the printable sheet.", "error");
+    return;
+  }
+
+  const blob = pdf.output("blob");
+  const blobUrl = URL.createObjectURL(blob);
   const sheet = printableSheetMarkup(ready);
-  const body = "<div class='inline-note'>This preview is rendered inside NEXUS. On Android, tap <strong>Print / Save PDF</strong> below—NEXUS no longer opens an <code>about:blank</code> tab.</div>" +
+  const body =
+    "<div class='inline-note'><strong>Mobile-safe printing:</strong> NEXUS has already built the finished US-Letter PDF. Tap <strong>Print / Open PDF</strong> to open it in your phone's PDF viewer, where you can print or save it. The old browser-page printing method is no longer used.</div>" +
     "<div class='nexus-print-preview'>" + sheet + "</div>";
   const modal = openModal("QR Print Preview", body, {
     wide: true,
-    footer: "<button class='btn btn-secondary' data-close-modal>Close</button><button class='btn btn-primary' id='nexus-print-now'>Print / Save PDF</button>"
+    footer:
+      "<button class='btn btn-secondary' data-close-modal>Close</button>" +
+      "<button class='btn btn-secondary' id='nexus-download-pdf'>Download PDF</button>" +
+      "<button class='btn btn-primary' id='nexus-print-now'>Print / Open PDF</button>"
   });
 
+  let revoked = false;
+  function revokeLater() {
+    if (revoked) return;
+    revoked = true;
+    setTimeout(function () { try { URL.revokeObjectURL(blobUrl); } catch (_) {} }, 120000);
+  }
+
   $("#nexus-print-now", modal).addEventListener("click", function () {
-    let root = document.getElementById("nexus-print-root");
-    if (root) root.remove();
-    root = document.createElement("div");
-    root.id = "nexus-print-root";
-    root.className = "nexus-print-root";
-    root.innerHTML = sheet;
-    document.body.appendChild(root);
+    try {
+      openPdfBlob(blobUrl);
+      toast("Printable PDF opened", "Use the PDF viewer's Print option if it does not open the print service automatically.", "success");
+    } catch (error) {
+      console.error(error);
+      toast("Could not open PDF", "Use Download PDF instead.", "error");
+    }
+  });
 
-    document.body.classList.add("nexus-printing");
-    let cleaned = false;
-    const cleanup = function () {
-      if (cleaned) return;
-      cleaned = true;
-      document.body.classList.remove("nexus-printing");
-      const current = document.getElementById("nexus-print-root");
-      if (current) current.remove();
-      window.removeEventListener("afterprint", cleanup);
-    };
-    window.addEventListener("afterprint", cleanup, { once: true });
+  $("#nexus-download-pdf", modal).addEventListener("click", function () {
+    try {
+      pdf.save("NEXUS-QR-Tags.pdf");
+      toast("PDF ready", "The QR sheet was saved as a PDF.", "success");
+    } catch (error) {
+      console.error(error);
+      toast("Download failed", error.message || "Could not save the PDF.", "error");
+    }
+  });
 
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        try {
-          window.print();
-        } catch (error) {
-          cleanup();
-          console.error(error);
-          toast("Printing failed", "Your browser could not open its print dialog.", "error");
-        }
-      });
-    });
-
-    setTimeout(cleanup, 90000);
+  $$("[data-close-modal]", modal).forEach(function (btn) {
+    btn.addEventListener("click", revokeLater, { once: true });
   });
 }
 
@@ -1659,6 +1820,7 @@ window.NEXUS = {
   openLocationForm: openLocationForm,
   openScanner: openScanner,
   printTags: printTags,
+  buildQrPdf: buildQrPdf,
   qrUrl: qrUrl,
   targetLabel: targetLabel,
   locationName: locationName,
