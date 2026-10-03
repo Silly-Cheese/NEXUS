@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0B0D10" />
+  <meta name="description" content="NEXUS — private personal operating system for money, receipts, assets, QR tags, locations, and books." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="styles.css" />
+  <title>NEXUS</title>
+</head>
+<body>
+  <div id="auth-gate" class="auth-gate">
+    <div class="auth-mark" aria-hidden="true">
+      <span></span><span></span><span></span>
+    </div>
+    <p class="eyebrow">PRIVATE PERSONAL OPERATING SYSTEM</p>
+    <h1>NEXUS</h1>
+    <p class="auth-copy">Organize. Track. Find. Keep.</p>
+    <button id="google-signin" class="btn btn-primary auth-btn" type="button">
+      <span class="google-g">G</span>
+      Continue with Google
+    </button>
+    <p id="auth-status" class="microcopy">Owner access only.</p>
+  </div>
+
+  <div id="public-scan" class="public-scan hidden"></div>
+
+  <div id="app-shell" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div>
+          <div class="brand-name">NEXUS</div>
+          <div class="brand-sub">PERSONAL OS</div>
+        </div>
+      </div>
+
+      <nav id="main-nav" class="main-nav" aria-label="Main navigation">
+        <button class="nav-item active" data-view="dashboard"><span>◈</span>Dashboard</button>
+        <button class="nav-item" data-view="money"><span>◇</span>Money</button>
+        <button class="nav-item" data-view="receipts"><span>▤</span>Receipts</button>
+        <button class="nav-item" data-view="assets"><span>▣</span>Assets</button>
+        <button class="nav-item" data-view="qr"><span>⌁</span>QR Registry</button>
+        <button class="nav-item" data-view="library"><span>▥</span>Library</button>
+        <button class="nav-item" data-view="locations"><span>⌖</span>Locations</button>
+        <button class="nav-item" data-view="search"><span>⌕</span>Search</button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <button class="nav-item" data-view="settings"><span>⚙</span>Settings</button>
+        <div id="owner-chip" class="owner-chip"></div>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <button id="mobile-menu" class="icon-btn mobile-only" aria-label="Open menu">☰</button>
+        <div class="global-search-wrap">
+          <span class="search-icon">⌕</span>
+          <input id="global-search" type="search" placeholder="Search anything in NEXUS…" autocomplete="off" />
+          <kbd>/</kbd>
+        </div>
+        <button id="global-scan" class="btn btn-secondary scan-btn" type="button">▦ Scan</button>
+        <button id="quick-add" class="btn btn-primary" type="button">＋ Add</button>
+      </header>
+
+      <section id="view" class="view" aria-live="polite"></section>
+    </main>
+
+    <nav class="mobile-nav" aria-label="Mobile navigation">
+      <button data-view="dashboard" class="active"><span>◈</span><small>Home</small></button>
+      <button data-view="receipts"><span>▤</span><small>Receipts</small></button>
+      <button id="mobile-scan" class="mobile-scan"><span>▦</span><small>Scan</small></button>
+      <button data-view="assets"><span>▣</span><small>Assets</small></button>
+      <button data-view="library"><span>▥</span><small>Library</small></button>
+    </nav>
+  </div>
+
+  <div id="modal-backdrop" class="modal-backdrop hidden">
+    <section id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></section>
+  </div>
+
+  <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+  <div id="qr-render-bin" class="qr-render-bin" aria-hidden="true"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
