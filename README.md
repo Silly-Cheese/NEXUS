@@ -228,3 +228,16 @@ Use **Ctrl/⌘ + K** or the command button in the top bar to quickly open:
 Anything else can be sent directly to NEXUS Search.
 
 Phase 3 still uses only Firebase Authentication and Cloud Firestore.
+
+
+### QR PDF printing
+
+QR printing no longer relies on `window.print()` or a popup page.
+
+NEXUS now renders QR images first, builds a real US-Letter PDF with jsPDF, and then provides:
+
+- **Print / Open PDF** — opens the finished PDF in the device/browser PDF viewer
+- **Download PDF** — saves `NEXUS-QR-Tags.pdf`
+- **Calibration PDF** — provides a 1-inch square and 4-inch line for verifying printer scale
+
+This is the preferred mobile flow for GitHub Pages and Android browsers.
