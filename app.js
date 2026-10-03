@@ -1520,6 +1520,38 @@ async function startOwnerSession(user) {
   }
 }
 
+window.NEXUS = {
+  state: state,
+  db: db,
+  auth: auth,
+  OWNER_EMAIL: OWNER_EMAIL,
+  refresh: refresh,
+  render: render,
+  setActiveView: setActiveView,
+  openModal: openModal,
+  closeModal: closeModal,
+  toast: toast,
+  writeActivity: writeActivity,
+  openReceiptDetail: openReceiptDetail,
+  openAssetForm: openAssetForm,
+  openBookForm: openBookForm,
+  openLocationForm: openLocationForm,
+  openScanner: openScanner,
+  printTags: printTags,
+  qrUrl: qrUrl,
+  targetLabel: targetLabel,
+  locationName: locationName,
+  tagFor: tagFor,
+  money: money,
+  dateText: dateText,
+  normalize: normalize,
+  escapeHtml: escapeHtml,
+  todayISO: todayISO,
+  monthKey: monthKey,
+  lookupIsbn: lookupIsbn
+};
+document.dispatchEvent(new CustomEvent("nexus:ready"));
+
 $("#google-signin").addEventListener("click", doGoogleSignIn);
 $("#global-scan").addEventListener("click", function () { openScanner(); });
 $("#mobile-scan").addEventListener("click", function () { openScanner(); });
