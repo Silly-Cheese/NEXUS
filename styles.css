@@ -1184,3 +1184,14 @@ html {
     min-height:96px;
   }
 }
+
+.receipt-scan-warning {
+  margin-bottom:14px;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid rgba(214,163,74,.28);
+  background:rgba(214,163,74,.08);
+  color:#e6bd75;
+  font-size:11px;
+  line-height:1.5;
+}
