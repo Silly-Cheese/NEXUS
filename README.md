@@ -62,3 +62,59 @@ QR codes use a separate `publicQr` collection for anonymous scanning. Public QR 
 ## Third-party browser libraries
 
 Phase 1 loads Chart.js, QRCode.js, html5-qrcode, and Tesseract.js from public CDNs. Open Library is used only for optional ISBN metadata lookup.
+
+
+## Phase 2
+
+Phase 2 turns the original modules into a connected personal operating system.
+
+### Connected purchases
+
+- Detects likely durable goods and books from receipt line items
+- Converts a receipt item directly into an Asset or Library record without retyping the purchase
+- Preserves the source receipt, merchant, purchase date, price, and item index
+- Shows the original receipt from linked Assets and Books
+- Adds return-window tracking to receipts and individual assets
+
+### Spending intelligence
+
+- Merchant profiles with total spend, purchase count, average transaction, and top category
+- Repeated-spending candidate detection across multiple months
+- Personal item price history built from repeated receipt line items
+- Transparent cutback observations based on category changes, merchant frequency, and small purchases
+- Natural-language answers for common questions such as "How much did I spend at Walmart this month?"
+
+### Asset intelligence
+
+- Lost Mode changes the public QR response without exposing private asset data
+- Warranty and return attention center
+- Linked purchase history
+- Asset event history
+- Return deadline/status tracking
+
+### QR lifecycle and Print Studio
+
+- Reset an assigned tag back to reusable/unassigned state
+- Permanently retire tags while preserving their history
+- Correct public states for active, unassigned, lost, and retired tags
+- Print Studio for selecting arbitrary tags and overriding print size
+- Existing normal-paper US Letter workflow remains supported
+
+### Library research layer
+
+- Reading-history logs
+- Page-specific research notes and tags
+- Research-note search through NEXUS Search
+- Bibliography builder with Chicago, Turabian, MLA, and APA-style output based on available catalog metadata
+- Shelf report grouped by physical location
+- Linked source receipts for books created from purchases
+- Natural-language library queries such as "Where is my Mere Christianity?" and "How many books do I own?"
+
+### Inventory scanning
+
+- Continuous QR scanning sessions
+- Audit a shelf, drawer, room, or other NEXUS location
+- Report expected-but-not-scanned and unexpected items
+- Move all scanned Assets/Books into a chosen location in one batch
+
+Phase 2 still uses only Firebase Authentication and Cloud Firestore. It adds no Firebase Storage dependency and introduces no additional Firebase service requirement.
