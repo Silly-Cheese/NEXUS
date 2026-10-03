@@ -249,40 +249,58 @@ function makeReceiptRegion(source, startRatio, endRatio) {
   return canvas;
 }
 
+function nextPaint() {
+  return new Promise(function (resolve) {
+    requestAnimationFrame(function () { setTimeout(resolve, 0); });
+  });
+}
+
+function limitCanvasPixels(source, maxWidth, maxPixels) {
+  let scale = Math.min(1, maxWidth / Math.max(1, source.width));
+  let width = Math.max(1, Math.round(source.width * scale));
+  let height = Math.max(1, Math.round(source.height * scale));
+  if (width * height > maxPixels) {
+    const pixelScale = Math.sqrt(maxPixels / (width * height));
+    width = Math.max(1, Math.round(width * pixelScale));
+    height = Math.max(1, Math.round(height * pixelScale));
+  }
+  if (width === source.width && height === source.height) return source;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(source, 0, 0, width, height);
+  return canvas;
+}
+
 async function prepareImage(file, rotation) {
   const image = await loadLocalImage(file);
-  const original = drawRotatedImage(image, rotation || 0, 2600);
+  await nextPaint();
+
+  // Keep preparation deliberately light on mobile: crop detection runs on a bounded canvas.
+  const original = drawRotatedImage(image, rotation || 0, 1500);
+  await nextPaint();
+
   const bounds = detectReceiptBounds(original);
-  const source = cropCanvas(original, bounds);
+  const cropped = cropCanvas(original, bounds);
+  const source = limitCanvasPixels(cropped, 1500, 2200000);
+  await nextPaint();
 
-  // Upscale narrow receipts after cropping so small thermal text has more pixels.
-  let ocrSource = source;
-  if (source.width < 1200) {
-    const scale = Math.min(2.4, 1400 / Math.max(1, source.width));
-    const enlarged = document.createElement("canvas");
-    enlarged.width = Math.round(source.width * scale);
-    enlarged.height = Math.round(source.height * scale);
-    const enlargeCtx = enlarged.getContext("2d");
-    enlargeCtx.imageSmoothingEnabled = true;
-    enlargeCtx.imageSmoothingQuality = "high";
-    enlargeCtx.drawImage(source, 0, 0, enlarged.width, enlarged.height);
-    ocrSource = enlarged;
-  }
-
-  const previewScale = Math.min(1, 860 / Math.max(source.width, source.height));
+  const previewScale = Math.min(1, 780 / Math.max(source.width, source.height));
   const preview = document.createElement("canvas");
   preview.width = Math.max(1, Math.round(source.width * previewScale));
   preview.height = Math.max(1, Math.round(source.height * previewScale));
   preview.getContext("2d").drawImage(source, 0, 0, preview.width, preview.height);
 
-  const enhanced = preprocess(ocrSource, false);
+  const statsCanvas = limitCanvasPixels(source, 900, 650000);
+  const stats = receiptImageStats(statsCanvas);
+
   return {
+    source: source,
     preview: preview,
-    enhanced: enhanced,
-    threshold: preprocess(ocrSource, true),
-    header: preprocess(makeReceiptRegion(ocrSource, 0, .34), false),
-    totals: preprocess(makeReceiptRegion(ocrSource, .28, .72), false),
-    stats: Object.assign(receiptImageStats(ocrSource), {
+    stats: Object.assign(stats, {
       autoCropped: !!bounds,
       cropConfidence: bounds ? bounds.confidence : 0,
       originalWidth: original.width,
@@ -291,6 +309,37 @@ async function prepareImage(file, rotation) {
   };
 }
 
+async function buildOcrPasses(prepared, scanMode, onStage) {
+  const source = prepared.source;
+  const passes = [];
+
+  onStage("Enhancing receipt…", 6);
+  await nextPaint();
+  const enhanced = preprocess(source, false);
+  passes.push({ name: "Receipt body", canvas: enhanced, start: 10, end: scanMode === "accurate" ? 40 : 96 });
+
+  if (scanMode === "accurate") {
+    onStage("Building high-contrast pass…", 12);
+    await nextPaint();
+    const thresholdSource = limitCanvasPixels(source, 1400, 1800000);
+    const threshold = preprocess(thresholdSource, true);
+    passes.push({ name: "High contrast", canvas: threshold, start: 41, end: 67 });
+
+    onStage("Preparing header…", 16);
+    await nextPaint();
+    const header = preprocess(makeReceiptRegion(source, 0, .38), false);
+    passes.push({ name: "Header", canvas: header, start: 68, end: 80 });
+
+    onStage("Preparing totals area…", 19);
+    await nextPaint();
+    const totals = preprocess(makeReceiptRegion(source, .24, .76), false);
+    passes.push({ name: "Totals region", canvas: totals, start: 81, end: 96 });
+  }
+
+  return passes;
+}
+
+
 function cleanLine(line) {
   return String(line || "")
     .replace(/[|¦]/g, " ")
@@ -298,6 +347,45 @@ function cleanLine(line) {
     .replace(/[’`]/g, "'")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeOcrDigits(value) {
+  return String(value || "")
+    .replace(/[OoQ]/g, "0")
+    .replace(/[Il|!]/g, "1")
+    .replace(/[Ss]/g, "5")
+    .replace(/[Bb]/g, "8")
+    .replace(/[Gg]/g, "6");
+}
+
+function receiptLabelKey(line) {
+  return norm(line)
+    .replace(/[|!1]/g, "l")
+    .replace(/0/g, "o")
+    .replace(/5/g, "s")
+    .replace(/8/g, "b")
+    .replace(/\s+/g, " ");
+}
+
+function looseMoneyTokens(line) {
+  const text = String(line || "");
+  const matches = text.match(/[-(]?\s*\$?\s*[\dOoQIl|!SsBbGg]{1,7}(?:(?:[.,:]|\s)\s*[\dOoQIl|!SsBbGg]{2})\)?/g) || [];
+  const out = [];
+  matches.forEach(function (token) {
+    let cleaned = normalizeOcrDigits(token)
+      .replace(/\$/g, "")
+      .replace(/[()]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const negative = /^-/.test(cleaned);
+    cleaned = cleaned.replace(/^-/, "");
+    cleaned = cleaned.replace(/([0-9]{1,7})\s*[, :]\s*([0-9]{2})$/, "$1.$2");
+    const match = cleaned.match(/\d{1,7}\.\d{2}$/);
+    if (!match) return;
+    const amount = Number(match[0]);
+    if (Number.isFinite(amount)) out.push(negative ? -amount : amount);
+  });
+  return out;
 }
 
 function parseMoneyToken(token) {
@@ -331,7 +419,7 @@ function parseMoneyToken(token) {
 }
 
 function moneyTokens(line) {
-  const matches = String(line || "").match(/[-(]?\s*\$?\s*[\dOoIlBSG]{1,7}(?:,\d{3})*(?:\.\d{2})\)?/g) || [];
+  const matches = String(line || "").match(/[-(]?\s*\$?\s*[\dOoQIl|!SsBbGg]{1,7}(?:,\d{3})*(?:[.,:]\d{2})\)?/g) || [];
   return matches.map(parseMoneyToken).filter(function (x) { return x !== null; });
 }
 
@@ -421,24 +509,42 @@ function merchantFromLines(lines) {
 }
 
 function parseDate(lines) {
-  const text = lines.slice(0, 40).join(" ");
-  let match = text.match(/\b(20\d{2})[\/.-](\d{1,2})[\/.-](\d{1,2})\b/);
-  if (match) {
-    const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-    if (!Number.isNaN(d.getTime())) return localISODate(d);
+  const candidates = lines.slice(0, 50);
+  for (let i = 0; i < candidates.length; i++) {
+    let text = normalizeOcrDigits(candidates[i])
+      .replace(/[\\|]/g, "/")
+      .replace(/\s*([/.-])\s*/g, "$1");
+
+    let match = text.match(/\b(20\d{2})[\/.-](\d{1,2})[\/.-](\d{1,2})\b/);
+    if (match) {
+      const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+      if (!Number.isNaN(d.getTime())) return localISODate(d);
+    }
+
+    match = text.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})\b/);
+    if (match) {
+      let year = Number(match[3]);
+      if (year < 100) year += year < 70 ? 2000 : 1900;
+      const month = Number(match[1]);
+      const day = Number(match[2]);
+      const d = new Date(year, month - 1, day);
+      if (!Number.isNaN(d.getTime()) && d.getMonth() === month - 1 && d.getDate() === day) return localISODate(d);
+    }
+
+    match = text.match(/\b(\d{1,2})\s+(\d{1,2})\s+(20\d{2})\b/);
+    if (match) {
+      const month = Number(match[1]), day = Number(match[2]), year = Number(match[3]);
+      const d = new Date(year, month - 1, day);
+      if (!Number.isNaN(d.getTime()) && d.getMonth() === month - 1 && d.getDate() === day) return localISODate(d);
+    }
   }
-  match = text.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})\b/);
-  if (match) {
-    let year = Number(match[3]);
-    if (year < 100) year += year < 70 ? 2000 : 1900;
-    const d = new Date(year, Number(match[1]) - 1, Number(match[2]));
-    if (!Number.isNaN(d.getTime()) && d.getMonth() === Number(match[1]) - 1) return localISODate(d);
-  }
-  match = text.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(20\d{2}|\d{2})\b/i);
-  if (match) {
-    let year = Number(match[3]);
+
+  const joined = lines.slice(0, 50).join(" ");
+  const monthMatch = joined.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(20\d{2}|\d{2})\b/i);
+  if (monthMatch) {
+    let year = Number(monthMatch[3]);
     if (year < 100) year += 2000;
-    const d = new Date(match[1] + " " + match[2] + ", " + year);
+    const d = new Date(monthMatch[1] + " " + monthMatch[2] + ", " + year);
     if (!Number.isNaN(d.getTime())) return localISODate(d);
   }
   return null;
@@ -446,15 +552,35 @@ function parseDate(lines) {
 
 function amountFromLines(lines, pattern, exclude) {
   const candidates = [];
-  lines.forEach(function (line) {
-    if (!pattern.test(line)) return;
-    if (exclude && exclude.test(line)) return;
-    const values = moneyTokens(line);
-    if (values.length) candidates.push(values[values.length - 1]);
-  });
-  return candidates.length ? candidates[candidates.length - 1] : 0;
-}
+  lines.forEach(function (line, index) {
+    const key = receiptLabelKey(line);
+    if (!pattern.test(key)) return;
+    if (exclude && exclude.test(key)) return;
 
+    const nearby = [line];
+    if (index + 1 < lines.length) nearby.push(lines[index + 1]);
+    if (index + 2 < lines.length) nearby.push(lines[index + 2]);
+    if (index > 0) nearby.push(lines[index - 1]);
+
+    for (let i = 0; i < nearby.length; i++) {
+      const values = looseMoneyTokens(nearby[i]);
+      if (values.length) {
+        candidates.push({
+          amount: values[values.length - 1],
+          distance: i === 0 ? 0 : i === 1 ? 1 : i === 2 ? 2 : 1.5,
+          index: index
+        });
+        break;
+      }
+    }
+  });
+  if (!candidates.length) return 0;
+  candidates.sort(function (a, b) {
+    if (a.distance !== b.distance) return a.distance - b.distance;
+    return b.index - a.index;
+  });
+  return candidates[0].amount;
+}
 function isMetadataLine(line) {
   return /(?:^|\b)(subtotal|sub total|total|grand total|amount due|balance due|tax|sales tax|change|cash|visa|mastercard|amex|discover|debit|credit|tender|payment|approval|auth|transaction|receipt|invoice|order|register|cashier|associate|server|customer|points|rewards|member|loyalty|phone|tel|www\.|http|thank you|items sold|item count)(?:\b|$)/i.test(line);
 }
@@ -493,9 +619,23 @@ function extractItems(lines) {
 function paymentMethod(lines) {
   const text = lines.join(" ");
   const brandMatch = text.match(/\b(VISA|MASTERCARD|MASTER CARD|AMEX|AMERICAN EXPRESS|DISCOVER|DEBIT|CREDIT)\b/i);
-  const direct = text.match(/\b(VISA|MASTERCARD|MASTER CARD|AMEX|AMERICAN EXPRESS|DISCOVER|DEBIT|CREDIT)\b[^\n]{0,45}[*xX#• -]{2,}(\d{4})\b/i);
-  const masked = text.match(/(?:account|acct)?\s*[*xX#• -]{4,}(\d{4})\b/i);
-  const lastFour = direct ? direct[2] : masked ? masked[1] : "";
+  let lastFour = "";
+
+  const accountLine = lines.find(function (line) {
+    return /account|acct|[*xX#•]{4,}/i.test(line);
+  });
+  if (accountLine) {
+    const normalized = normalizeOcrDigits(accountLine);
+    const match = normalized.match(/(\d{4})\s*$/);
+    if (match) lastFour = match[1];
+  }
+
+  if (!lastFour) {
+    const normalizedText = normalizeOcrDigits(text);
+    const masked = normalizedText.match(/(?:account|acct)?\s*[*xX#• -]{4,}(\d{4})\b/i);
+    if (masked) lastFour = masked[1];
+  }
+
   if (brandMatch) {
     const brand = brandMatch[1].replace(/master card/i, "Mastercard").replace(/american express/i, "Amex");
     return lastFour ? brand + " •••• " + lastFour : brand;
@@ -508,22 +648,26 @@ function paymentMethod(lines) {
 
 function balanceInfo(parsed) {
   const itemSum = (parsed.items || []).reduce(function (sum, item) { return sum + Number(item.price || 0); }, 0);
-  const base = Number(parsed.subtotal || 0) || itemSum;
-  const expected = base + Number(parsed.tax || 0);
-  const difference = Number(parsed.total || 0) - expected;
+  const subtotal = Number(parsed.subtotal || 0);
+  const tax = Number(parsed.tax || 0);
+  const total = Number(parsed.total || 0);
+  const hasFinancialData = itemSum > 0 || subtotal > 0 || tax > 0 || total > 0;
+  const base = subtotal || itemSum;
+  const expected = base + tax;
+  const difference = total - expected;
   return {
     itemSum: itemSum,
     expected: expected,
     difference: difference,
-    balanced: !parsed.total || Math.abs(difference) <= .08
+    hasFinancialData: hasFinancialData,
+    balanced: hasFinancialData && total > 0 && Math.abs(difference) <= .08
   };
 }
-
 function parseReceiptText(rawText) {
   const lines = String(rawText || "").split(/\r?\n/).map(cleanLine).filter(Boolean);
-  let subtotal = amountFromLines(lines, /\bsub\s*total\b|\bsubtotal\b/i);
-  let tax = amountFromLines(lines, /\b(?:sales\s*)?tax\b/i, /\btax id\b/i);
-  let total = amountFromLines(lines, /\b(?:grand\s+total|amount\s+due|balance\s+due|total\s+due|total)\b/i, /\b(?:subtotal|sub\s*total|total\s+savings|total\s+discount|total\s+items?)\b/i);
+  let subtotal = amountFromLines(lines, /\bsub\s*total\b|\bsubtotal\b|\bsub\s*tota[l1i]\b/i);
+  let tax = amountFromLines(lines, /\b(?:sales\s*)?tax\b|\bt[a4]x\b/i, /\btax id\b/i);
+  let total = amountFromLines(lines, /\b(?:grand\s+tota[l1i]|amount\s+due|balance\s+due|tota[l1i]\s+due|tota[l1i])\b/i, /\b(?:subtotal|sub\s*total|total\s+savings|total\s+discount|total\s+items?)\b/i);
   const items = extractItems(lines);
   const detectedDate = parseDate(lines);
 
@@ -535,7 +679,7 @@ function parseReceiptText(rawText) {
   if ((!subtotal || !total) && lines.length) {
     const values = [];
     lines.forEach(function (line, index) {
-      moneyTokens(line).forEach(function (amount) {
+      looseMoneyTokens(line).forEach(function (amount) {
         if (amount >= 0 && amount < 100000) values.push({ amount: amount, index: index });
       });
     });
@@ -739,14 +883,16 @@ function openReview(parsed) {
     const total = Number(form.elements.total.value || 0);
     const expected = (subtotal || itemSum) + tax;
     const difference = total - expected;
-    const balanced = !total || Math.abs(difference) <= .08;
+    const hasFinancialData = itemSum > 0 || subtotal > 0 || tax > 0 || total > 0;
+    const balanced = hasFinancialData && total > 0 && Math.abs(difference) <= .08;
+    const statusClass = !hasFinancialData ? "missing" : balanced ? "ok" : "warn";
     modal.querySelector("#smart-reconcile").innerHTML =
-      "<div class='smart-reconcile-card " + (balanced ? "ok" : "warn") + "'>" +
+      "<div class='smart-reconcile-card " + statusClass + "'>" +
         "<div><span>Items</span><strong>" + money(itemSum) + "</strong></div>" +
         "<div><span>Subtotal</span><strong>" + money(subtotal) + "</strong></div>" +
         "<div><span>Tax</span><strong>" + money(tax) + "</strong></div>" +
         "<div><span>Total</span><strong>" + money(total) + "</strong></div>" +
-        "<div class='smart-reconcile-result'><span>" + (balanced ? "✓ Balanced" : "△ Difference") + "</span><strong>" + (balanced ? "Looks good" : money(difference)) + "</strong></div>" +
+        "<div class='smart-reconcile-result'><span>" + (!hasFinancialData ? "— Not detected" : balanced ? "✓ Balanced" : "△ Difference") + "</span><strong>" + (!hasFinancialData ? "Review receipt" : balanced ? "Looks good" : money(difference)) + "</strong></div>" +
       "</div>";
   }
 
@@ -914,7 +1060,9 @@ function openScanner() {
     status("Preparing image…", true);
     progress(4);
     try {
+      progress(12);
       prepared = await prepareImage(file, rotation);
+      progress(82);
       const preview = modal.querySelector("#smart-receipt-preview");
       preview.width = prepared.preview.width;
       preview.height = prepared.preview.height;
@@ -980,17 +1128,16 @@ function openScanner() {
     const button = modal.querySelector("#smart-run-scan");
     button.disabled = true;
     const scanMode = mode();
-    const passes = scanMode === "accurate" ? [
-      {name:"Receipt body",canvas:prepared.enhanced,start:5,end:40},
-      {name:"High contrast",canvas:prepared.threshold,start:41,end:70},
-      {name:"Header",canvas:prepared.header,start:71,end:83},
-      {name:"Totals region",canvas:prepared.totals,start:84,end:96}
-    ] : [
-      {name:"Receipt body",canvas:prepared.enhanced,start:5,end:96}
-    ];
 
     try {
+      status("Preparing OCR passes…", true);
+      progress(5);
+      const passes = await buildOcrPasses(prepared, scanMode, function (label, value) {
+        status(label, true);
+        progress(value);
+      });
       const candidates = [];
+      const rawPassTexts = [];
       for (let i = 0; i < passes.length; i++) {
         const pass = passes[i];
         status(pass.name + " OCR…", true);
@@ -1002,7 +1149,9 @@ function openScanner() {
             if (message.status) status(pass.name + " · " + message.status.replaceAll("_", " "), true);
           }
         });
-        const parsed = parseReceiptText(result.data.text || "");
+        const rawPassText = result.data.text || "";
+        rawPassTexts.push("===== " + pass.name + " =====\n" + rawPassText);
+        const parsed = parseReceiptText(rawPassText);
         parsed.scanMeta = Object.assign({}, parsed.scanMeta || {}, {
           ocrConfidence: Number(result.data.confidence || 0),
           pass: pass.name,
@@ -1015,6 +1164,18 @@ function openScanner() {
           cropConfidence: Number(prepared.stats.cropConfidence || 0)
         });
         candidates.push(parsed);
+      }
+      if (rawPassTexts.length > 1) {
+        const combined = parseReceiptText(rawPassTexts.join("\n"));
+        combined.scanMeta = Object.assign({}, combined.scanMeta || {}, {
+          ocrConfidence: candidates.reduce(function (sum, candidate) { return sum + Number(candidate.scanMeta.ocrConfidence || 0); }, 0) / Math.max(1, candidates.length),
+          pass: "Combined passes",
+          mode: scanMode,
+          imageWidth: prepared.stats.width,
+          imageHeight: prepared.stats.height,
+          autoCropped: !!prepared.stats.autoCropped
+        });
+        candidates.push(combined);
       }
       const parsed = bestCandidate(candidates);
       parsed.scanMeta.candidateCount = candidates.length;
