@@ -244,8 +244,12 @@ function bookEditor(ids) {
         ["Hardcover","Paperback","Leather / Imitation Leather","Spiral","Other"].map(function (x) { return option(x,x); }).join("") + "</select>") +
       fieldToggle("publisher","Publisher","<input name='publisher' maxlength='180' placeholder='Set the same publisher'>") +
       fieldToggle("year","Publication year","<input name='year' maxlength='40' placeholder='2026'>") +
+      fieldToggle("edition","Edition","<input name='edition' maxlength='120' placeholder='2nd, Revised, Study Edition…'>") +
+      fieldToggle("language","Language","<input name='language' maxlength='40' placeholder='en'>") +
+      fieldToggle("pageCount","Pages","<input name='pageCount' type='number' min='0' step='1'>") +
       fieldToggle("purchasePrice","Purchase price","<input name='purchasePrice' type='number' min='0' step='0.01'>") +
       fieldToggle("collections","Collections","<div class='bulk-inline-grid'><select name='collectionsMode'><option value='add'>Add</option><option value='remove'>Remove</option><option value='replace'>Replace</option></select><input name='collections' placeholder='Theology, Favorites'></div>","Comma-separated") +
+      fieldToggle("subjects","Subjects","<div class='bulk-inline-grid'><select name='subjectsMode'><option value='add'>Add</option><option value='remove'>Remove</option><option value='replace'>Replace</option></select><input name='subjects' placeholder='Theology, Church history'></div>","Comma-separated") +
       fieldToggle("notes","Notes","<div class='bulk-inline-grid'><select name='notesMode'><option value='append'>Append</option><option value='replace'>Replace</option><option value='clear'>Clear</option></select><textarea name='notes' placeholder='Text to apply'></textarea></div>") +
     "</form>";
   return { title:"Bulk Edit Books", body:body };
@@ -338,6 +342,14 @@ function enabled(form,name) {
   return !!(el && el.checked);
 }
 
+function applyArrayMode(existing, values, mode) {
+  const current=Array.isArray(existing)?existing.slice():[];
+  if(mode==="replace") return Array.from(new Set(values));
+  if(mode==="add") return Array.from(new Set(current.concat(values)));
+  const remove=new Set(values.map(function(x){return String(x).toLowerCase();}));
+  return current.filter(function(x){return !remove.has(String(x).toLowerCase());});
+}
+
 function applyTextMode(existing, value, mode) {
   if (mode === "clear") return "";
   if (mode === "replace") return value;
@@ -354,17 +366,17 @@ function patchForRecord(view, record, form) {
     if(enabled(form,"format")) patch.format=form.elements.format.value;
     if(enabled(form,"publisher")) patch.publisher=form.elements.publisher.value.trim();
     if(enabled(form,"year")) patch.year=form.elements.year.value.trim();
+    if(enabled(form,"edition")) patch.edition=form.elements.edition.value.trim();
+    if(enabled(form,"language")) patch.language=form.elements.language.value.trim();
+    if(enabled(form,"pageCount")) patch.pageCount=Number(form.elements.pageCount.value || 0);
     if(enabled(form,"purchasePrice")) patch.purchasePrice=Number(form.elements.purchasePrice.value || 0);
     if(enabled(form,"collections")){
       const values=form.elements.collections.value.split(",").map(function(x){return x.trim();}).filter(Boolean);
-      const mode=form.elements.collectionsMode.value;
-      const current=Array.isArray(record.collections)?record.collections.slice():[];
-      if(mode==="replace") patch.collections=Array.from(new Set(values));
-      else if(mode==="add") patch.collections=Array.from(new Set(current.concat(values)));
-      else {
-        const remove=new Set(values.map(function(x){return x.toLowerCase();}));
-        patch.collections=current.filter(function(x){return !remove.has(String(x).toLowerCase());});
-      }
+      patch.collections=applyArrayMode(record.collections,values,form.elements.collectionsMode.value);
+    }
+    if(enabled(form,"subjects")){
+      const values=form.elements.subjects.value.split(",").map(function(x){return x.trim();}).filter(Boolean);
+      patch.subjects=applyArrayMode(record.subjects,values,form.elements.subjectsMode.value);
     }
     if(enabled(form,"notes")) patch.notes=applyTextMode(record.notes,form.elements.notes.value.trim(),form.elements.notesMode.value);
   }
@@ -430,11 +442,23 @@ async function commitBulkEdit() {
   save.textContent="Updating…";
 
   try{
-    for(let offset=0;offset<ids.length;offset+=400){
+    const chunkSize=BULK.view==="receipts" ? 200 : 400;
+    for(let offset=0;offset<ids.length;offset+=chunkSize){
       const batch=writeBatch(N().db);
-      ids.slice(offset,offset+400).forEach(function(id){
+      ids.slice(offset,offset+chunkSize).forEach(function(id){
         const record=dataMap.get(id) || {id:id};
-        batch.update(doc(N().db,config.collection,id),patchForRecord(BULK.view,record,form));
+        const patch=patchForRecord(BULK.view,record,form);
+        batch.update(doc(N().db,config.collection,id),patch);
+
+        if(BULK.view==="receipts"){
+          S().data.transactions.filter(function(transaction){return transaction.sourceReceiptId===id;}).forEach(function(transaction){
+            const linkedPatch={updatedAt:serverTimestamp()};
+            let hasLinkedChange=false;
+            if(enabled(form,"date")){linkedPatch.date=form.elements.date.value;hasLinkedChange=true;}
+            if(enabled(form,"itemCategory")){linkedPatch.category=form.elements.itemCategory.value;hasLinkedChange=true;}
+            if(hasLinkedChange)batch.update(doc(N().db,"transactions",transaction.id),linkedPatch);
+          });
+        }
       });
       await batch.commit();
     }
@@ -443,7 +467,7 @@ async function commitBulkEdit() {
     N().closeModal();
     BULK.selected.clear();
     BULK.active=false;
-    await N().refresh([config.collection,"activity"]);
+    await N().refresh(BULK.view==="receipts" ? [config.collection,"transactions","activity"] : [config.collection,"activity"]);
     N().toast("Bulk edit complete",ids.length+" "+config.label+" updated.","success");
   }catch(error){
     console.error(error);
