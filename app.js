@@ -806,6 +806,7 @@ function openQuickAdd() {
     quickTile("scan-receipt", "▤", "Scan receipt", "Extract a purchase from paper") +
     quickTile("add-transaction", "◇", "Transaction", "Record spending manually") +
     quickTile("add-income", "↥", "Income", "Record money coming in") +
+    quickTile("log-work-hours", "◷", "Work hours", "Add hours to an hourly pay period") +
     quickTile("add-recurring", "⟳", "Recurring bill", "Add a monthly or repeating obligation") +
     quickTile("add-savings-goal", "◎", "Savings goal", "Reserve money toward something important") +
     quickTile("add-budget-target", "◒", "Budget target", "Set a category limit or percentage target") +
