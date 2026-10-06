@@ -1849,3 +1849,86 @@ html {
   .budget-summary-grid,
   .budget-goal-plan { grid-template-columns:1fr; }
 }
+
+/* Hourly income tracking */
+.hourly-income-list {
+  display:grid;
+  gap:9px;
+}
+.hourly-income-card {
+  display:grid;
+  gap:11px;
+  padding:12px;
+  border:1px solid rgba(200,169,107,.22);
+  border-radius:12px;
+  background:
+    radial-gradient(circle at 95% 0%, rgba(200,169,107,.07), transparent 14rem),
+    #101319;
+}
+.hourly-income-metrics {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:7px;
+}
+.hourly-income-metrics > div,
+.hourly-period-summary > div,
+.hourly-history-summary > div {
+  display:grid;
+  gap:3px;
+  padding:9px 10px;
+  border:1px solid var(--border-soft);
+  border-radius:9px;
+  background:rgba(255,255,255,.017);
+}
+.hourly-income-metrics span,
+.hourly-period-summary span,
+.hourly-history-summary span {
+  color:var(--muted-2);
+  font-size:8px;
+  text-transform:uppercase;
+  letter-spacing:.07em;
+}
+.hourly-income-metrics strong,
+.hourly-period-summary strong,
+.hourly-history-summary strong {
+  font-size:12px;
+}
+.hourly-income-metrics small {
+  color:var(--muted-2);
+  font-size:8px;
+}
+.hourly-income-actions {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.hourly-period-summary {
+  display:grid;
+  grid-template-columns:2fr 1fr;
+  gap:8px;
+}
+.hourly-history-summary {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+}
+.hourly-source-picker {
+  width:100%;
+  color:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.hourly-source-picker:hover {
+  border-color:rgba(200,169,107,.38);
+}
+@media (max-width:850px) {
+  .hourly-income-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .hourly-income-actions { display:grid; }
+  .hourly-income-actions .row-actions { justify-content:flex-start; flex-wrap:wrap; }
+}
+@media (max-width:520px) {
+  .hourly-income-metrics,
+  .hourly-history-summary,
+  .hourly-period-summary { grid-template-columns:1fr; }
+}
