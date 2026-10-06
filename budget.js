@@ -740,11 +740,21 @@ function openWhatIf(){
 }
 
 function handleAction(event){
-  const button=event.target.closest("[data-budget-action],[data-quick='add-income']");
+  const button=event.target.closest("[data-budget-action],[data-quick='add-income'],[data-quick='add-recurring'],[data-quick='add-savings-goal'],[data-quick='add-budget-target']");
   if(!button)return;
-  if(button.matches("[data-quick='add-income']")){
-    event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
-    N().closeModal();setTimeout(function(){openIncomeEntry();},0);return;
+  if(button.matches("[data-quick]")){
+    const quick=button.dataset.quick;
+    if(["add-income","add-recurring","add-savings-goal","add-budget-target"].includes(quick)){
+      event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+      N().closeModal();
+      setTimeout(function(){
+        if(quick==="add-income")openIncomeEntry();
+        if(quick==="add-recurring")openRecurringForm();
+        if(quick==="add-savings-goal")openGoalForm();
+        if(quick==="add-budget-target")openCategoryForm();
+      },0);
+      return;
+    }
   }
   const action=button.dataset.budgetAction;
   if(!action)return;
