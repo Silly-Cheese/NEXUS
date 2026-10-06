@@ -24,8 +24,8 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
 
-const COLLECTIONS = ["transactions", "receipts", "assets", "qrTags", "books", "locations", "activity", "loans", "finderReports", "budgetCategories", "incomeSources", "recurringExpenses", "savingsGoals", "savingsContributions"];
-const OPTIONAL_COLLECTIONS = new Set(["budgetCategories", "incomeSources", "recurringExpenses", "savingsGoals", "savingsContributions"]);
+const COLLECTIONS = ["transactions", "receipts", "assets", "qrTags", "books", "locations", "activity", "loans", "finderReports", "budgetCategories", "incomeSources", "recurringExpenses", "savingsGoals", "savingsContributions", "budgetSettings"];
+const OPTIONAL_COLLECTIONS = new Set(["budgetCategories", "incomeSources", "recurringExpenses", "savingsGoals", "savingsContributions", "budgetSettings"]);
 const CATEGORIES = [
   "Groceries", "Dining", "Transportation", "Books", "Electronics", "Household",
   "Personal Care", "Education", "Entertainment", "Subscriptions", "Medical", "Gifts", "Other"
@@ -809,6 +809,7 @@ function openQuickAdd() {
     quickTile("add-recurring", "⟳", "Recurring bill", "Add a monthly or repeating obligation") +
     quickTile("add-savings-goal", "◎", "Savings goal", "Reserve money toward something important") +
     quickTile("add-budget-target", "◒", "Budget target", "Set a category limit or percentage target") +
+    quickTile("set-starting-balance", "¤", "Current balance", "Tell NEXUS how much money you have right now") +
     quickTile("add-asset", "▣", "Asset", "Register something you own") +
     quickTile("add-book", "▥", "Book", "Catalog a book") +
     quickTile("add-location", "⌖", "Location", "Add a shelf, drawer, room, or box") +
