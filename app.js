@@ -559,7 +559,7 @@ function locationCard(loc) {
 function renderSearch() {
   const term = state.searchTerm || $("#global-search") && $("#global-search").value || "";
   const results = searchEverything(term);
-  return viewHeader("SEARCH", term ? "Results for “" + term + "”" : "Search NEXUS", "One search across your spending, receipts, possessions, books, locations, and QR registry.", "") +
+  return viewHeader("SEARCH", term ? "Results for “" + term + "”" : "Search NEXUS", "One search across your budget, income, spending, receipts, possessions, books, locations, and QR registry.", "") +
     (term ? renderSearchResults(results) : "<section class='card'>" + emptyState("Search anything", "Try a merchant, book title, ISBN, serial number, asset, shelf, category, or QR code.") + "</section>");
 }
 
@@ -574,6 +574,10 @@ function searchEverything(term) {
   groups.Books = state.data.books.filter(function (b) { return match([b.title, b.author, b.isbn, b.publisher, locationName(b.locationId)].join(" ")); }).slice(0, 20);
   groups.Locations = state.data.locations.filter(function (l) { return match([l.name, l.type, locationName(l.parentId)].join(" ")); }).slice(0, 20);
   groups["QR Tags"] = state.data.qrTags.filter(function (q) { return match([q.labelCode, q.targetType, targetLabel(q)].join(" ")); }).slice(0, 20);
+  groups["Income Sources"] = state.data.incomeSources.filter(function (x) { return match([x.name, x.category, x.note, x.amount, x.cadence].join(" ")); }).slice(0, 20);
+  groups["Recurring Expenses"] = state.data.recurringExpenses.filter(function (x) { return match([x.name, x.merchant, x.category, x.note, x.amount, x.cadence].join(" ")); }).slice(0, 20);
+  groups["Savings Goals"] = state.data.savingsGoals.filter(function (x) { return match([x.name, x.targetAmount, x.currentAmount, x.monthlyContribution].join(" ")); }).slice(0, 20);
+  groups["Budget Categories"] = state.data.budgetCategories.filter(function (x) { return match([x.category, x.targetType, x.value].join(" ")); }).slice(0, 20);
   return groups;
 }
 
@@ -594,6 +598,10 @@ function searchResult(group, item) {
   if (group === "Books") { title = item.title || "Book"; sub = (item.author || "Unknown author") + (item.isbn ? " · " + item.isbn : ""); view = "library"; }
   if (group === "Locations") { title = item.name || "Location"; sub = item.type || "Location"; view = "locations"; }
   if (group === "QR Tags") { title = item.labelCode || item.id; sub = targetLabel(item); view = "qr"; }
+  if (group === "Income Sources") { title = item.name || "Income source"; sub = money(item.amount) + " · " + (item.cadence || "monthly"); view = "budget"; }
+  if (group === "Recurring Expenses") { title = item.name || "Recurring expense"; sub = money(item.amount) + (item.nextDueDate ? " · due " + dateText(item.nextDueDate) : ""); view = "budget"; }
+  if (group === "Savings Goals") { title = item.name || "Savings goal"; sub = money(item.currentAmount) + " of " + money(item.targetAmount); view = "budget"; }
+  if (group === "Budget Categories") { title = item.category || "Budget category"; sub = item.targetType === "percent" ? item.value + "% of disposable income" : money(item.value) + " monthly target"; view = "budget"; }
   return "<div class='result' data-view-jump='" + view + "'><div class='result-title'>" + escapeHtml(title) + "</div><div class='result-sub'>" + escapeHtml(sub) + "</div></div>";
 }
 
@@ -608,7 +616,8 @@ function renderSettings() {
     "<section class='card'><div class='card-title-row'><div><h2>Data</h2><div class='microcopy'>Firebase project: nexus-5fd52</div></div></div>" +
       "<div class='panel-list'><div class='list-row'><span>Transactions</span><strong>" + counts.transactions + "</strong></div><div class='list-row'><span>Receipts</span><strong>" +
       counts.receipts + "</strong></div><div class='list-row'><span>Assets</span><strong>" + counts.assets + "</strong></div><div class='list-row'><span>Books</span><strong>" +
-      counts.books + "</strong></div><div class='list-row'><span>QR tags</span><strong>" + counts.qrTags + "</strong></div></div><div style='margin-top:14px'><button class='btn btn-secondary' data-action='export-json'>Export NEXUS JSON</button></div></section></div>" +
+      counts.books + "</strong></div><div class='list-row'><span>QR tags</span><strong>" + counts.qrTags + "</strong></div><div class='list-row'><span>Budget records</span><strong>" +
+      (counts.budgetCategories + counts.incomeSources + counts.recurringExpenses + counts.savingsGoals + counts.savingsContributions) + "</strong></div></div><div style='margin-top:14px'><button class='btn btn-secondary' data-action='export-json'>Export NEXUS JSON</button></div></section></div>" +
     "<section class='card section-gap'><div class='card-title-row'><div><h2>Phase 1 architecture</h2><div class='microcopy'>Deliberately limited Firebase footprint</div></div></div>" +
       "<div class='grid grid-3'><div class='insight'><div class='insight-label'>Firebase Auth</div><strong>Google sign-in</strong><p>Authenticates your one authorized owner account.</p></div>" +
       "<div class='insight'><div class='insight-label'>Cloud Firestore</div><strong>Structured records</strong><p>Stores extracted receipt data, spending, assets, tags, books, locations, and history.</p></div>" +
