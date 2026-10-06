@@ -48,6 +48,26 @@ service cloud.firestore {
       allow read, write: if isOwner();
     }
 
+    match /budgetCategories/{document=**} {
+      allow read, write: if isOwner();
+    }
+
+    match /incomeSources/{document=**} {
+      allow read, write: if isOwner();
+    }
+
+    match /recurringExpenses/{document=**} {
+      allow read, write: if isOwner();
+    }
+
+    match /savingsGoals/{document=**} {
+      allow read, write: if isOwner();
+    }
+
+    match /savingsContributions/{document=**} {
+      allow read, write: if isOwner();
+    }
+
     match /finderReports/{reportId} {
       allow create: if request.resource.data.keys().hasOnly([
           'publicSlug',
