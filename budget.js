@@ -205,9 +205,19 @@ function snapshot(){
   const actualIncome=sumAmounts(incomeRows);
   const actualExpenses=sumAmounts(expenseRows);
 
-  const activeIncomeSources=S().data.incomeSources.filter(function(x){return x.active!==false;});
+  const allIncomeSources=S().data.incomeSources;
+  const activeIncomeSources=allIncomeSources.filter(function(x){return x.active!==false;});
   const expectedIncome=activeIncomeSources.reduce(function(sum,x){return sum+plannedMonthlyAmount(x,"nextDate");},0);
-  const budgetIncome=expectedIncome>0?Math.max(actualIncome,expectedIncome):actualIncome;
+  const budgetedSourceIncome=allIncomeSources.reduce(function(sum,source){
+    const planned=source.active===false?0:plannedMonthlyAmount(source,"nextDate");
+    const received=incomeRows.filter(function(row){return row.incomeSourceId===source.id;})
+      .reduce(function(total,row){return total+Number(row.amount||0);},0);
+    return sum+Math.max(planned,received);
+  },0);
+  const unplannedIncome=incomeRows.filter(function(row){
+    return !row.incomeSourceId || !allIncomeSources.some(function(source){return source.id===row.incomeSourceId;});
+  }).reduce(function(sum,row){return sum+Number(row.amount||0);},0);
+  const budgetIncome=budgetedSourceIncome+unplannedIncome;
 
   const activeRecurring=S().data.recurringExpenses.filter(function(x){return x.active!==false;});
   const recurringMonthly=activeRecurring.reduce(function(sum,x){return sum+plannedMonthlyAmount(x,"nextDueDate");},0);
@@ -215,9 +225,23 @@ function snapshot(){
   const dueEnd=monthEnd();
   const upcomingRecurring=[];
   activeRecurring.forEach(function(item){
-    datesDueBetween(item,dueStart,dueEnd,"nextDueDate").forEach(function(date){
-      upcomingRecurring.push({item:item,date:date,amount:Number(item.amount||0)});
-    });
+    const firstDue=item.nextDueDate?parseDate(item.nextDueDate):null;
+    if(firstDue && firstDue<dueStart){
+      upcomingRecurring.push({item:item,date:item.nextDueDate,amount:Number(item.amount||0),overdue:true});
+      if(item.cadence!=="one-time"){
+        let next=advanceDate(item.nextDueDate,item.cadence);
+        let guard=0;
+        while(parseDate(next)<=dueEnd && guard<60){
+          if(parseDate(next)>=dueStart)upcomingRecurring.push({item:item,date:next,amount:Number(item.amount||0),overdue:false});
+          next=advanceDate(next,item.cadence);
+          guard++;
+        }
+      }
+    }else{
+      datesDueBetween(item,dueStart,dueEnd,"nextDueDate").forEach(function(date){
+        upcomingRecurring.push({item:item,date:date,amount:Number(item.amount||0),overdue:false});
+      });
+    }
   });
   const futureRecurring=upcomingRecurring.reduce(function(sum,x){return sum+x.amount;},0);
 
@@ -257,7 +281,7 @@ function snapshot(){
 
   return {
     key:key,incomeRows:incomeRows,expenseRows:expenseRows,
-    actualIncome:actualIncome,actualExpenses:actualExpenses,expectedIncome:expectedIncome,budgetIncome:budgetIncome,
+    actualIncome:actualIncome,actualExpenses:actualExpenses,expectedIncome:expectedIncome,budgetIncome:budgetIncome,unplannedIncome:unplannedIncome,
     recurringMonthly:recurringMonthly,upcomingRecurring:upcomingRecurring,futureRecurring:futureRecurring,
     savingsTarget:savingsTarget,savingsActual:savingsActual,savingsRemaining:savingsRemaining,reservedSavings:reservedSavings,
     disposableIncome:disposableIncome,byCategory:byCategory,categoryTargets:categoryTargets,categoryRows:categoryRows,
