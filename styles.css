@@ -1736,3 +1736,62 @@ html {
     grid-template-columns:1fr;
   }
 }
+
+.budget-flow-list {
+  display:grid;
+  gap:1px;
+  overflow:hidden;
+  border:1px solid var(--border);
+  border-radius:11px;
+  background:var(--border);
+}
+.budget-flow-list > div {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:11px 12px;
+  background:#101319;
+}
+.budget-flow-list span {
+  color:var(--muted);
+  font-size:10px;
+}
+.budget-flow-list strong {
+  font-size:12px;
+}
+.budget-flow-list .budget-flow-emphasis {
+  background:rgba(200,169,107,.055);
+}
+.budget-flow-list .budget-flow-emphasis strong {
+  color:var(--gold-2);
+}
+.budget-class-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+.budget-class-grid > div {
+  display:grid;
+  gap:3px;
+  padding:10px 11px;
+  border:1px solid var(--border-soft);
+  border-radius:10px;
+  background:#101319;
+}
+.budget-class-grid span {
+  color:var(--muted-2);
+  font-size:9px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.budget-class-grid strong {
+  font-size:13px;
+}
+.budget-class-grid small {
+  color:var(--muted-2);
+  font-size:9px;
+}
+@media (max-width:480px) {
+  .budget-class-grid { grid-template-columns:1fr; }
+}
