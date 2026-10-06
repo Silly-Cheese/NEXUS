@@ -1200,3 +1200,278 @@ html {
 .smart-reconcile-card.missing .smart-reconcile-result span {
   color: var(--muted);
 }
+
+/* Universal bulk editing */
+.bulk-selection-mode .entity-card,
+.bulk-selection-mode table tbody tr {
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.bulk-selection-mode .entity-card {
+  position: relative;
+}
+.bulk-selected {
+  background: rgba(200,169,107,.07) !important;
+  box-shadow: inset 0 0 0 1px rgba(200,169,107,.46);
+}
+.bulk-select-cell {
+  width: 42px;
+  min-width: 42px;
+  text-align: center;
+}
+.bulk-select-cell input,
+.bulk-card-selector input,
+.bulk-field-enable input {
+  accent-color: var(--gold);
+}
+.bulk-card-selector {
+  position: absolute;
+  z-index: 3;
+  top: 9px;
+  left: 9px;
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(11,13,16,.9);
+  cursor: pointer;
+}
+.bulk-card-selector input {
+  width: 16px;
+  height: 16px;
+}
+.bulk-selection-mode .entity-card .entity-top {
+  padding-left: 36px;
+}
+.bulk-selection-bar {
+  position: sticky;
+  top: 78px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: -8px 0 20px;
+  padding: 11px 13px;
+  border: 1px solid rgba(200,169,107,.32);
+  border-radius: 12px;
+  background: rgba(18,21,26,.96);
+  box-shadow: 0 12px 30px rgba(0,0,0,.24);
+  backdrop-filter: blur(16px);
+}
+.bulk-selection-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  white-space: nowrap;
+}
+.bulk-selection-summary strong {
+  color: var(--gold-2);
+}
+.bulk-selection-summary span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.bulk-selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.bulk-edit-form {
+  display: grid;
+  gap: 10px;
+}
+.bulk-field {
+  display: grid;
+  grid-template-columns: minmax(150px,.42fr) minmax(0,1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #101319;
+}
+.bulk-field-enable {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--text);
+  cursor: pointer;
+  padding-top: 9px;
+}
+.bulk-field-enable input {
+  margin-top: 2px;
+}
+.bulk-field-control {
+  min-width: 0;
+}
+.bulk-field-control.disabled {
+  opacity: .42;
+}
+.bulk-field-control input,
+.bulk-field-control select,
+.bulk-field-control textarea {
+  width: 100%;
+}
+.bulk-inline-grid {
+  display: grid;
+  grid-template-columns: 150px minmax(0,1fr);
+  gap: 8px;
+}
+
+/* Broader book scanning */
+.book-scan-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.book-scan-hero h3 {
+  margin: 3px 0 6px;
+}
+.book-scan-hero p {
+  margin: 0;
+  max-width: 620px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.book-scan-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 16px 0 10px;
+}
+.book-scan-pane {
+  display: grid;
+  gap: 10px;
+}
+.book-photo-drop {
+  min-height: 108px;
+}
+.book-search-bar {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 8px;
+}
+.book-search-bar input {
+  width: 100%;
+}
+.book-search-results,
+.book-scan-queue {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.book-search-option {
+  display: grid;
+  grid-template-columns: 42px minmax(0,1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #101319;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.book-search-option:hover {
+  border-color: rgba(200,169,107,.45);
+}
+.book-search-option img,
+.book-search-cover {
+  width: 42px;
+  height: 58px;
+  border-radius: 5px;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: #0b0e12;
+  color: var(--gold);
+}
+.book-search-option > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.book-search-option small {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.book-batch-settings {
+  display: grid;
+  gap: 12px;
+}
+.book-batch-grid {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 8px;
+}
+.book-batch-grid > label:not(.check-row) {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.book-batch-grid .check-row {
+  align-self: end;
+  min-height: 39px;
+}
+.book-scan-result {
+  display: grid;
+  grid-template-columns: 48px minmax(0,1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #101319;
+}
+.book-scan-result.duplicate {
+  border-color: rgba(214,163,74,.35);
+}
+.book-scan-result img,
+.book-scan-cover-placeholder {
+  width: 48px;
+  height: 66px;
+  border-radius: 5px;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: #0b0e12;
+  color: var(--gold);
+}
+.book-scan-result-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.book-scan-result-main > span,
+.book-scan-result-main small {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.book-scan-result-main .badge {
+  justify-self: start;
+  margin-top: 3px;
+}
+.book-scan-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.empty-state.compact {
+  padding: 22px;
+}
+
+/* Receipt OCR completeness */
+.smart-reconcile-card.warn .smart-reconcile-result strong {
+  white-space: normal;
+}
