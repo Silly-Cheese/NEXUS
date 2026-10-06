@@ -68,6 +68,10 @@ service cloud.firestore {
       allow read, write: if isOwner();
     }
 
+    match /budgetSettings/{document=**} {
+      allow read, write: if isOwner();
+    }
+
     match /finderReports/{reportId} {
       allow create: if request.resource.data.keys().hasOnly([
           'publicSlug',
