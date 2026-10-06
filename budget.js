@@ -590,7 +590,7 @@ function currentTrackedBalance(){
   S().data.transactions.forEach(function(row){
     let include=false;
     const createdAt=timestampMillis(row.createdAt);
-    if(capturedAt && createdAt) include=createdAt>capturedAt;
+    if(capturedAt && createdAt) include=createdAt>capturedAt && (!balanceDate || !row.date || String(row.date)>=String(balanceDate));
     else if(balanceDate && row.date) include=String(row.date)>String(balanceDate);
     if(!include)return;
     const amount=Number(row.amount||0);
