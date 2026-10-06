@@ -1,4 +1,4 @@
-const NEXUS_CACHE = "nexus-runtime-v3.5.1";
+const NEXUS_CACHE = "nexus-runtime-v3.5.2";
 
 self.addEventListener("install", function (event) {
   self.skipWaiting();
