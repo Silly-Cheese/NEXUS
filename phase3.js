@@ -612,7 +612,7 @@ function openRestoreBackup() {
 function validateBackup(payload) {
   if (!payload || typeof payload !== "object") throw new Error("The file is not a NEXUS backup.");
   if (!payload.data || typeof payload.data !== "object") throw new Error("Backup data section is missing.");
-  const known = ["transactions","receipts","assets","qrTags","books","locations","activity","loans","finderReports"];
+  const known = ["transactions","receipts","assets","qrTags","books","locations","activity","loans","finderReports","budgetCategories","incomeSources","recurringExpenses","savingsGoals","savingsContributions"];
   const present = known.filter(function (key) { return Array.isArray(payload.data[key]); });
   if (!present.length) throw new Error("No recognized NEXUS collections were found.");
 }
@@ -631,7 +631,7 @@ function normalizeImportedValue(value) {
 }
 
 async function restoreBackup(payload) {
-  const known = ["transactions","receipts","assets","qrTags","books","locations","activity","loans","finderReports"];
+  const known = ["transactions","receipts","assets","qrTags","books","locations","activity","loans","finderReports","budgetCategories","incomeSources","recurringExpenses","savingsGoals","savingsContributions"];
   const writes = [];
   known.forEach(function (collectionName) {
     const rows = Array.isArray(payload.data[collectionName]) ? payload.data[collectionName] : [];
