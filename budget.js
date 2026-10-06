@@ -62,13 +62,64 @@ function monthlyEquivalent(amount,cadence){
   return amount;
 }
 
+function payPeriodLengthDays(cadence){
+  if(cadence==="weekly") return 7;
+  if(cadence==="biweekly") return 14;
+  if(cadence==="semimonthly") return 15;
+  if(cadence==="monthly") return 30;
+  return 14;
+}
+
+function periodEndFromStart(start,cadence){
+  const d=parseDate(start||todayISO());
+  d.setDate(d.getDate()+payPeriodLengthDays(cadence)-1);
+  return isoDate(d);
+}
+
+function shiftPeriodDate(iso,cadence){
+  const d=parseDate(iso||todayISO());
+  d.setDate(d.getDate()+payPeriodLengthDays(cadence));
+  return isoDate(d);
+}
+
+function sourcePeriodLogs(source){
+  if(!source || !source.id)return [];
+  const start=source.periodStart||"0000-01-01";
+  const end=source.periodEnd||"9999-12-31";
+  return (S().data.workHours||[]).filter(function(log){
+    return log.sourceId===source.id && String(log.date||"")>=start && String(log.date||"")<=end;
+  }).sort(function(a,b){return String(b.date||"").localeCompare(String(a.date||""));});
+}
+
+function hourlyPeriodStats(source){
+  const logs=sourcePeriodLogs(source);
+  const hourlyRate=Math.max(0,Number(source&&source.hourlyRate||0));
+  const overtimeMultiplier=Math.max(1,Number(source&&source.overtimeMultiplier||1.5));
+  const takeHomePercent=Math.max(0,Math.min(100,Number(source&&source.takeHomePercent == null ? 100 : source.takeHomePercent)));
+  const regularHours=logs.reduce(function(sum,log){return sum+Number(log.hours||0);},0);
+  const overtimeHours=logs.reduce(function(sum,log){return sum+Number(log.overtimeHours||0);},0);
+  const gross=regularHours*hourlyRate + overtimeHours*hourlyRate*overtimeMultiplier;
+  const estimatedNet=gross*(takeHomePercent/100);
+  return {
+    logs:logs,regularHours:regularHours,overtimeHours:overtimeHours,totalHours:regularHours+overtimeHours,
+    hourlyRate:hourlyRate,overtimeMultiplier:overtimeMultiplier,takeHomePercent:takeHomePercent,
+    gross:gross,estimatedNet:estimatedNet
+  };
+}
+
+function incomeSourcePaymentEstimate(source){
+  if(source && source.payType==="hourly") return hourlyPeriodStats(source).estimatedNet;
+  return Number(source&&source.amount||0);
+}
+
 function plannedMonthlyAmount(item,dateField){
   if(!item || item.active===false) return 0;
+  const perPayment=item.payType==="hourly" ? incomeSourcePaymentEstimate(item) : Number(item.amount||0);
   if(item.cadence==="one-time"){
     const date=item[dateField];
-    return date && monthKey(date)===currentMonthKey() ? Number(item.amount||0) : 0;
+    return date && monthKey(date)===currentMonthKey() ? perPayment : 0;
   }
-  return monthlyEquivalent(item.amount,item.cadence);
+  return monthlyEquivalent(perPayment,item.cadence);
 }
 
 function advanceDate(iso,cadence){
@@ -475,17 +526,23 @@ function categoryBudgetMarkup(snap){
 function incomeMarkup(snap){
   const sources=S().data.incomeSources.filter(function(x){return x.active!==false;});
   const actual=snap.incomeRows.slice().sort(function(a,b){return String(b.date).localeCompare(String(a.date));});
-  return "<section class='card'><div class='card-title-row'><div><h2>Income Tracker</h2><div class='microcopy'>Expected income and actual money received</div></div><div class='row-actions'><button class='btn btn-small btn-secondary' data-budget-action='income-source-form'>＋ Source</button><button class='btn btn-small btn-primary' data-budget-action='income-entry'>＋ Income</button></div></div>"+
-    (sources.length?"<div class='budget-subsection'><div class='eyebrow'>EXPECTED SOURCES</div><div class='panel-list'>"+sources.map(function(source){
+  return "<section class='card'><div class='card-title-row'><div><h2>Income Tracker</h2><div class='microcopy'>Fixed income plus live hourly pay-period earnings</div></div><div class='row-actions'><button class='btn btn-small btn-secondary' data-budget-action='income-source-form'>＋ Source</button><button class='btn btn-small btn-primary' data-budget-action='income-entry'>＋ Income</button></div></div>"+
+    (sources.length?"<div class='budget-subsection'><div class='eyebrow'>EXPECTED SOURCES</div><div class='hourly-income-list'>"+sources.map(function(source){
+      if(source.payType==="hourly"){
+        const stats=hourlyPeriodStats(source);
+        const period=[source.periodStart?N().dateText(source.periodStart):"",source.periodEnd?N().dateText(source.periodEnd):""].filter(Boolean).join(" – ");
+        return "<article class='hourly-income-card'><div class='card-title-row'><div><div class='list-title'>"+esc(source.name)+"</div><div class='list-sub'>"+money(source.hourlyRate||0)+"/hour · "+esc(source.cadence||"biweekly")+(source.nextDate?" · paid "+N().dateText(source.nextDate):"")+"</div></div>"+badge("HOURLY","gold")+"</div>"+
+          "<div class='hourly-income-metrics'><div><span>Pay period</span><strong>"+esc(period||"Not set")+"</strong></div><div><span>Hours logged</span><strong>"+stats.totalHours.toFixed(2)+"h</strong><small>"+(stats.overtimeHours?stats.overtimeHours.toFixed(2)+"h overtime":"Regular hours")+"</small></div><div><span>Gross earned</span><strong>"+money(stats.gross)+"</strong><small>"+money(stats.hourlyRate)+"/hr</small></div><div><span>Est. take-home</span><strong>"+money(stats.estimatedNet)+"</strong><small>"+stats.takeHomePercent.toFixed(0)+"% of gross</small></div></div>"+
+          "<div class='hourly-income-actions'><div class='microcopy'>Budget estimate: "+money(plannedMonthlyAmount(source,"nextDate"))+"/month based on hours logged so far.</div><div class='row-actions'><button class='btn btn-small btn-primary' data-budget-action='log-hours' data-id='"+esc(source.id)+"'>＋ Hours</button><button class='btn btn-small btn-secondary' data-budget-action='work-history' data-id='"+esc(source.id)+"'>Hours</button><button class='btn btn-small btn-secondary' data-budget-action='record-source-payment' data-id='"+esc(source.id)+"'>Paycheck</button><button class='btn btn-small btn-ghost' data-budget-action='income-source-form' data-id='"+esc(source.id)+"'>Edit</button></div></div></article>";
+      }
       return "<div class='list-row'><div><div class='list-title'>"+esc(source.name)+"</div><div class='list-sub'>"+money(source.amount)+" · "+esc(source.cadence||"monthly")+(source.nextDate?" · next "+N().dateText(source.nextDate):"")+"</div></div><div class='row-actions'><strong>"+money(plannedMonthlyAmount(source,"nextDate"))+"/mo</strong><button class='btn btn-small btn-primary' data-budget-action='record-source-payment' data-id='"+esc(source.id)+"'>Record</button><button class='btn btn-small btn-ghost' data-budget-action='income-source-form' data-id='"+esc(source.id)+"'>Edit</button></div></div>";
-    }).join("")+"</div></div>":"<div class='inline-note'>Add recurring or expected income sources to make projections useful before the money actually arrives.</div>")+
+    }).join("")+"</div></div>":"<div class='inline-note'>Add a fixed or hourly income source. Hourly sources become more accurate as you log hours throughout the pay period.</div>")+
     "<div class='divider'></div><div class='budget-subsection'><div class='eyebrow'>ACTUAL THIS MONTH</div>"+
       (actual.length?"<div class='panel-list'>"+actual.slice(0,8).map(function(row){
-        return "<div class='list-row'><div><div class='list-title'>"+esc(row.merchant||"Income")+"</div><div class='list-sub'>"+N().dateText(row.date)+" · "+esc(row.category||"Income")+"</div></div><strong class='green'>+"+money(row.amount)+"</strong></div>";
+        return "<div class='list-row'><div><div class='list-title'>"+esc(row.merchant||"Income")+"</div><div class='list-sub'>"+N().dateText(row.date)+" · "+esc(row.category||"Income")+(row.loggedHours?" · "+Number(row.loggedHours).toFixed(2)+"h period":"")+"</div></div><strong class='green'>+"+money(row.amount)+"</strong></div>";
       }).join("")+"</div>":"<div class='empty-state compact'><strong>No income recorded this month</strong><div>Record a paycheck, reimbursement, gift, scholarship, refund, or other income.</div></div>")+
     "</div></section>";
 }
-
 function recurringMarkup(snap){
   const rows=S().data.recurringExpenses.filter(function(x){return x.active!==false;}).slice().sort(function(a,b){return String(a.nextDueDate||"9999").localeCompare(String(b.nextDueDate||"9999"));});
   return "<section class='card'><div class='card-title-row'><div><h2>Recurring Obligations</h2><div class='microcopy'>Bills and commitments reserved before discretionary spending</div></div><button class='btn btn-small btn-secondary' data-budget-action='recurring-form'>＋ Obligation</button></div>"+
@@ -638,24 +695,33 @@ function openIncomeEntry(prefill){
     const source=findById(S().data.incomeSources,form.elements.sourceId.value);
     if(!source)return;
     form.elements.merchant.value=source.name||"";
-    form.elements.amount.value=source.amount||"";
+    form.elements.amount.value=incomeSourcePaymentEstimate(source)||"";
     form.elements.category.value=source.category||"Paycheck";
   });
   modal.querySelector("#budget-save-income").addEventListener("click",async function(){
     if(!form.reportValidity())return;
     const sourceId=formValue(form,"sourceId");
+    const source=sourceId?findById(S().data.incomeSources,sourceId):null;
+    const stats=source&&source.payType==="hourly"?hourlyPeriodStats(source):null;
     const data={
       date:formValue(form,"date"),type:"income",merchant:formValue(form,"merchant"),
       amount:Number(formValue(form,"amount")),category:formValue(form,"category"),note:formValue(form,"note"),
-      incomeSourceId:sourceId||null,createdAt:serverTimestamp(),updatedAt:serverTimestamp()
+      incomeSourceId:sourceId||null,
+      payType:source&&source.payType||"fixed",
+      payPeriodStart:stats?source.periodStart||"":null,payPeriodEnd:stats?source.periodEnd||"":null,
+      loggedHours:stats?stats.totalHours:null,estimatedGross:stats?stats.gross:null,estimatedTakeHome:stats?stats.estimatedNet:null,
+      createdAt:serverTimestamp(),updatedAt:serverTimestamp()
     };
     try{
       const ref=await addDoc(collection(N().db,"transactions"),data);
       if(sourceId){
-        const source=findById(S().data.incomeSources,sourceId);
         if(source&&source.nextDate&&source.cadence!=="one-time"){
-          const next=advanceRecordedOccurrence(source.nextDate,source.cadence,data.date);
-          await updateDoc(doc(N().db,"incomeSources",sourceId),{nextDate:next,updatedAt:serverTimestamp()});
+          const update={nextDate:advanceRecordedOccurrence(source.nextDate,source.cadence,data.date),updatedAt:serverTimestamp()};
+          if(source.payType==="hourly"){
+            update.periodStart=shiftPeriodDate(source.periodStart,source.cadence);
+            update.periodEnd=shiftPeriodDate(source.periodEnd,source.cadence);
+          }
+          await updateDoc(doc(N().db,"incomeSources",sourceId),update);
         }else if(source&&source.cadence==="one-time"){
           await updateDoc(doc(N().db,"incomeSources",sourceId),{active:false,updatedAt:serverTimestamp()});
         }
@@ -670,25 +736,143 @@ function openIncomeEntry(prefill){
 
 function openIncomeSourceForm(id){
   const existing=findById(S().data.incomeSources,id)||{};
+  const payType=existing.payType||"fixed";
+  const defaultStart=existing.periodStart||todayISO();
+  const defaultEnd=existing.periodEnd||periodEndFromStart(defaultStart,existing.cadence||"biweekly");
   const body="<form id='income-source-form' class='form-grid'>"+
-    "<div class='field full'><label>Source name</label><input name='name' required maxlength='120' value='"+esc(existing.name||"")+"' placeholder='Mardel paycheck'></div>"+
-    "<div class='field'><label>Amount per payment</label><input name='amount' type='number' min='0' step='0.01' required value='"+esc(existing.amount||"")+"'></div>"+
-    "<div class='field'><label>Frequency</label><select name='cadence'>"+cadenceOptions(existing.cadence||"biweekly")+"</select></div>"+
-    "<div class='field'><label>Next expected date</label><input name='nextDate' type='date' value='"+esc(existing.nextDate||todayISO())+"'></div>"+
+    "<div class='field full'><label>Source name</label><input name='name' required maxlength='120' value='"+esc(existing.name||"")+"' placeholder='Work paycheck'></div>"+
+    "<div class='field'><label>Pay type</label><select name='payType'><option value='fixed' "+(payType==="fixed"?"selected":"")+">Fixed amount</option><option value='hourly' "+(payType==="hourly"?"selected":"")+">Hourly pay</option></select></div>"+
+    "<div class='field'><label>Pay frequency</label><select name='cadence'>"+cadenceOptions(existing.cadence||"biweekly")+"</select></div>"+
+    "<div id='income-fixed-fields' class='field full'><label>Amount per payment</label><input name='amount' type='number' min='0' step='0.01' value='"+esc(existing.amount||"")+"'></div>"+
+    "<div id='income-hourly-fields' class='field full'><div class='form-grid'>"+
+      "<div class='field'><label>Hourly rate</label><input name='hourlyRate' type='number' min='0' step='0.01' value='"+esc(existing.hourlyRate||"")+"'></div>"+
+      "<div class='field'><label>Estimated take-home %</label><input name='takeHomePercent' type='number' min='0' max='100' step='0.1' value='"+esc(existing.takeHomePercent==null?"100":existing.takeHomePercent)+"'><div class='field-hint'>Use 100% for gross-pay budgeting, or lower it to roughly account for withholding.</div></div>"+
+      "<div class='field'><label>Current pay period starts</label><input name='periodStart' type='date' value='"+esc(defaultStart)+"'></div>"+
+      "<div class='field'><label>Current pay period ends</label><input name='periodEnd' type='date' value='"+esc(defaultEnd)+"'></div>"+
+      "<div class='field'><label>Overtime multiplier</label><input name='overtimeMultiplier' type='number' min='1' step='0.1' value='"+esc(existing.overtimeMultiplier||"1.5")+"'></div>"+
+      "<div class='field'><label>Live estimate</label><div id='income-hourly-preview' class='goal-recommendation-card'></div></div>"+
+    "</div></div>"+
+    "<div class='field'><label>Next expected payday</label><input name='nextDate' type='date' value='"+esc(existing.nextDate||todayISO())+"'></div>"+
     "<div class='field'><label>Income category</label><select name='category'>"+incomeCategoryOptions(existing.category||"Paycheck")+"</select></div>"+
     "<div class='field full'><label>Note</label><textarea name='note'>"+esc(existing.note||"")+"</textarea></div>"+
     "<label class='check-row full'><input name='active' type='checkbox' "+(existing.active===false?"":"checked")+"> Active income source</label></form>";
-  const modal=N().openModal(existing.id?"Edit Income Source":"Add Income Source",body,{footer:"<button class='btn btn-secondary' data-close-modal>Cancel</button>"+(existing.id?"<button class='btn btn-danger' id='delete-income-source'>Delete</button>":"")+"<button class='btn btn-primary' id='save-income-source'>Save</button>"});
+  const modal=N().openModal(existing.id?"Edit Income Source":"Add Income Source",body,{wide:true,footer:"<button class='btn btn-secondary' data-close-modal>Cancel</button>"+(existing.id?"<button class='btn btn-danger' id='delete-income-source'>Delete</button>":"")+"<button class='btn btn-primary' id='save-income-source'>Save</button>"});
   const form=modal.querySelector("#income-source-form");
+
+  function updatePayType(){
+    const hourly=formValue(form,"payType")==="hourly";
+    modal.querySelector("#income-fixed-fields").classList.toggle("hidden",hourly);
+    modal.querySelector("#income-hourly-fields").classList.toggle("hidden",!hourly);
+    form.elements.amount.required=!hourly;
+    form.elements.hourlyRate.required=hourly;
+    form.elements.periodStart.required=hourly;
+    form.elements.periodEnd.required=hourly;
+    if(hourly){
+      const temp=Object.assign({},existing,{
+        id:existing.id||"preview",hourlyRate:Number(formValue(form,"hourlyRate")||0),
+        takeHomePercent:Number(formValue(form,"takeHomePercent")||100),
+        overtimeMultiplier:Number(formValue(form,"overtimeMultiplier")||1.5),
+        periodStart:formValue(form,"periodStart"),periodEnd:formValue(form,"periodEnd"),payType:"hourly"
+      });
+      const stats=existing.id?hourlyPeriodStats(temp):{totalHours:0,gross:0,estimatedNet:0};
+      modal.querySelector("#income-hourly-preview").innerHTML="<span>Current logged estimate</span><strong>"+money(stats.estimatedNet)+"</strong><small>"+Number(stats.totalHours||0).toFixed(2)+" hours · "+money(stats.gross||0)+" gross</small>";
+    }
+  }
+
+  form.elements.payType.addEventListener("change",updatePayType);
+  ["hourlyRate","takeHomePercent","overtimeMultiplier","periodStart","periodEnd"].forEach(function(name){
+    form.elements[name].addEventListener("input",updatePayType);
+    form.elements[name].addEventListener("change",updatePayType);
+  });
+  form.elements.cadence.addEventListener("change",function(){
+    if(formValue(form,"payType")==="hourly" && formValue(form,"periodStart")) form.elements.periodEnd.value=periodEndFromStart(formValue(form,"periodStart"),formValue(form,"cadence"));
+    updatePayType();
+  });
+  form.elements.periodStart.addEventListener("change",function(){
+    if(formValue(form,"payType")==="hourly") form.elements.periodEnd.value=periodEndFromStart(formValue(form,"periodStart"),formValue(form,"cadence"));
+    updatePayType();
+  });
+  updatePayType();
+
   modal.querySelector("#save-income-source").addEventListener("click",async function(){
     if(!form.reportValidity())return;
-    const data={name:formValue(form,"name"),amount:Number(formValue(form,"amount")),cadence:formValue(form,"cadence"),nextDate:formValue(form,"nextDate"),category:formValue(form,"category"),note:formValue(form,"note"),active:form.elements.active.checked,updatedAt:serverTimestamp()};
+    const type=formValue(form,"payType");
+    const data={
+      name:formValue(form,"name"),payType:type,cadence:formValue(form,"cadence"),nextDate:formValue(form,"nextDate"),
+      category:formValue(form,"category"),note:formValue(form,"note"),active:form.elements.active.checked,updatedAt:serverTimestamp(),
+      amount:type==="fixed"?Number(formValue(form,"amount")||0):0,
+      hourlyRate:type==="hourly"?Number(formValue(form,"hourlyRate")||0):0,
+      takeHomePercent:type==="hourly"?Number(formValue(form,"takeHomePercent")||100):100,
+      overtimeMultiplier:type==="hourly"?Number(formValue(form,"overtimeMultiplier")||1.5):1.5,
+      periodStart:type==="hourly"?formValue(form,"periodStart"):"",
+      periodEnd:type==="hourly"?formValue(form,"periodEnd"):""
+    };
     if(existing.id)await updateDoc(doc(N().db,"incomeSources",existing.id),data);
     else{data.createdAt=serverTimestamp();await addDoc(collection(N().db,"incomeSources"),data);}
-    N().closeModal();await N().refresh(["incomeSources"]);N().toast("Income source saved","Budget projections updated.","success");
+    N().closeModal();await N().refresh(["incomeSources"]);
+    N().toast("Income source saved",type==="hourly"?"Log hours during the pay period and NEXUS will update the income estimate live.":"Budget projections updated.","success");
   });
   const del=modal.querySelector("#delete-income-source");
-  if(del)del.addEventListener("click",async function(){if(!confirm("Delete this income source? Actual income transactions will remain."))return;await deleteDoc(doc(N().db,"incomeSources",existing.id));N().closeModal();await N().refresh(["incomeSources"]);});
+  if(del)del.addEventListener("click",async function(){if(!confirm("Delete this income source? Actual income transactions and work-hour history will remain."))return;await deleteDoc(doc(N().db,"incomeSources",existing.id));N().closeModal();await N().refresh(["incomeSources"]);});
+}
+
+function openHoursForm(id){
+  const source=findById(S().data.incomeSources,id);
+  if(!source || source.payType!=="hourly")return;
+  const body="<div class='hourly-period-summary'><div><span>Pay period</span><strong>"+esc(N().dateText(source.periodStart)+" – "+N().dateText(source.periodEnd))+"</strong></div><div><span>Rate</span><strong>"+money(source.hourlyRate)+"/hr</strong></div></div>"+
+    "<form id='work-hours-form' class='form-grid section-gap'>"+
+      "<div class='field'><label>Work date</label><input name='date' type='date' required value='"+esc(todayISO())+"' min='"+esc(source.periodStart||"")+"' max='"+esc(source.periodEnd||"")+"'></div>"+
+      "<div class='field'><label>Regular hours</label><input name='hours' type='number' min='0' max='24' step='0.01' required placeholder='8'></div>"+
+      "<div class='field'><label>Overtime hours</label><input name='overtimeHours' type='number' min='0' max='24' step='0.01' value='0'></div>"+
+      "<div class='field'><label>Estimated earnings</label><div id='hours-estimate' class='goal-recommendation-card'></div></div>"+
+      "<div class='field full'><label>Note</label><textarea name='note' maxlength='300' placeholder='Optional shift note'></textarea></div>"+
+    "</form>";
+  const modal=N().openModal("Log Hours · "+source.name,body,{footer:"<button class='btn btn-secondary' data-close-modal>Cancel</button><button class='btn btn-primary' id='save-work-hours'>Add Hours</button>"});
+  const form=modal.querySelector("#work-hours-form");
+  function estimate(){
+    const regular=Number(formValue(form,"hours")||0),ot=Number(formValue(form,"overtimeHours")||0);
+    const gross=regular*Number(source.hourlyRate||0)+ot*Number(source.hourlyRate||0)*Number(source.overtimeMultiplier||1.5);
+    const net=gross*(Number(source.takeHomePercent==null?100:source.takeHomePercent)/100);
+    modal.querySelector("#hours-estimate").innerHTML="<span>This shift</span><strong>"+money(net)+" est. take-home</strong><small>"+money(gross)+" gross · "+(regular+ot).toFixed(2)+" hours</small>";
+  }
+  form.elements.hours.addEventListener("input",estimate);
+  form.elements.overtimeHours.addEventListener("input",estimate);
+  estimate();
+  modal.querySelector("#save-work-hours").addEventListener("click",async function(){
+    if(!form.reportValidity())return;
+    const hours=Number(formValue(form,"hours")||0),overtimeHours=Number(formValue(form,"overtimeHours")||0);
+    if(hours+overtimeHours<=0){N().toast("Enter hours","Add at least some regular or overtime hours.","error");return;}
+    const gross=hours*Number(source.hourlyRate||0)+overtimeHours*Number(source.hourlyRate||0)*Number(source.overtimeMultiplier||1.5);
+    await addDoc(collection(N().db,"workHours"),{
+      sourceId:source.id,sourceName:source.name,date:formValue(form,"date"),hours:hours,overtimeHours:overtimeHours,
+      hourlyRate:Number(source.hourlyRate||0),overtimeMultiplier:Number(source.overtimeMultiplier||1.5),
+      grossEstimated:gross,note:formValue(form,"note"),createdAt:serverTimestamp(),updatedAt:serverTimestamp()
+    });
+    await N().writeActivity("budget","Work hours logged","incomeSource",source.id,source.name+" · "+(hours+overtimeHours).toFixed(2)+"h · "+money(gross)+" gross");
+    N().closeModal();await N().refresh(["workHours","activity"]);
+    N().toast("Hours logged",(hours+overtimeHours).toFixed(2)+" hours added to the current pay period.","success");
+  });
+}
+
+function openWorkHistory(id){
+  const source=findById(S().data.incomeSources,id); if(!source)return;
+  const logs=(S().data.workHours||[]).filter(function(log){return log.sourceId===id;}).sort(function(a,b){return String(b.date||"").localeCompare(String(a.date||""));});
+  const current=hourlyPeriodStats(source);
+  const body="<div class='hourly-history-summary'><div><span>Current period hours</span><strong>"+current.totalHours.toFixed(2)+"h</strong></div><div><span>Gross earned</span><strong>"+money(current.gross)+"</strong></div><div><span>Estimated take-home</span><strong>"+money(current.estimatedNet)+"</strong></div></div>"+
+    "<div class='divider'></div>"+(logs.length?"<div class='panel-list'>"+logs.slice(0,40).map(function(log){
+      return "<div class='list-row'><div><div class='list-title'>"+N().dateText(log.date)+" · "+(Number(log.hours||0)+Number(log.overtimeHours||0)).toFixed(2)+"h</div><div class='list-sub'>"+Number(log.hours||0).toFixed(2)+" regular"+(Number(log.overtimeHours||0)?" · "+Number(log.overtimeHours).toFixed(2)+" overtime":"")+(log.note?" · "+esc(log.note):"")+"</div></div><div class='row-actions'><strong>"+money(log.grossEstimated||0)+" gross</strong><button class='icon-btn' data-budget-action='delete-work-log' data-id='"+esc(log.id)+"' data-source-id='"+esc(id)+"' title='Delete'>×</button></div></div>";
+    }).join("")+"</div>":"<div class='empty-state'><strong>No hours logged</strong><div>Log each shift as the pay period goes by.</div></div>");
+  N().openModal("Hours · "+source.name,body,{wide:true,footer:"<button class='btn btn-secondary' data-close-modal>Close</button><button class='btn btn-primary' data-budget-action='log-hours' data-id='"+esc(id)+"'>＋ Log Hours</button>"});
+}
+
+async function deleteWorkLog(id,sourceId){
+  if(!id)return;
+  if(!confirm("Delete this hours entry?"))return;
+  await deleteDoc(doc(N().db,"workHours",id));
+  await N().refresh(["workHours"]);
+  N().toast("Hours entry deleted","The pay-period estimate has been recalculated.","success");
+  N().closeModal();
+  setTimeout(function(){openWorkHistory(sourceId);},0);
 }
 
 function openRecurringForm(id){
@@ -965,9 +1149,12 @@ function handleAction(event){
   if(action==="starting-balance")openStartingBalance();
   if(action==="income-entry")openIncomeEntry();
   if(action==="income-source-form")openIncomeSourceForm(id);
+  if(action==="log-hours")openHoursForm(id);
+  if(action==="work-history")openWorkHistory(id);
+  if(action==="delete-work-log")deleteWorkLog(id,button.dataset.sourceId);
   if(action==="record-source-payment"){
     const source=findById(S().data.incomeSources,id);
-    if(source)openIncomeEntry({sourceId:source.id,merchant:source.name,amount:source.amount,category:source.category||"Paycheck"});
+    if(source)openIncomeEntry({sourceId:source.id,merchant:source.name,amount:incomeSourcePaymentEstimate(source),category:source.category||"Paycheck"});
   }
   if(action==="recurring-form")openRecurringForm(id);
   if(action==="mark-recurring-paid")markRecurringPaid(id);
