@@ -316,24 +316,24 @@ async function buildOcrPasses(prepared, scanMode, onStage) {
   onStage("Enhancing receipt…", 6);
   await nextPaint();
   const enhanced = preprocess(source, false);
-  passes.push({ name: "Receipt body", canvas: enhanced, start: 10, end: scanMode === "accurate" ? 40 : 96 });
+  passes.push({ name: "Receipt body", canvas: enhanced, start: 10, end: scanMode === "accurate" ? 40 : 96, psm: "4" });
 
   if (scanMode === "accurate") {
     onStage("Building high-contrast pass…", 12);
     await nextPaint();
     const thresholdSource = limitCanvasPixels(source, 1400, 1800000);
     const threshold = preprocess(thresholdSource, true);
-    passes.push({ name: "High contrast", canvas: threshold, start: 41, end: 67 });
+    passes.push({ name: "High contrast", canvas: threshold, start: 41, end: 67, psm: "4" });
 
     onStage("Preparing header…", 16);
     await nextPaint();
     const header = preprocess(makeReceiptRegion(source, 0, .38), false);
-    passes.push({ name: "Header", canvas: header, start: 68, end: 80 });
+    passes.push({ name: "Header", canvas: header, start: 68, end: 80, psm: "6" });
 
     onStage("Preparing totals area…", 19);
     await nextPaint();
     const totals = preprocess(makeReceiptRegion(source, .24, .76), false);
-    passes.push({ name: "Totals region", canvas: totals, start: 81, end: 96 });
+    passes.push({ name: "Totals region", canvas: totals, start: 81, end: 96, psm: "6" });
   }
 
   return passes;
@@ -347,6 +347,39 @@ function cleanLine(line) {
     .replace(/[’`]/g, "'")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function structuredOcrText(data) {
+  const base = String(data && data.text || "").trim();
+  const words = Array.isArray(data && data.words) ? data.words.filter(function (word) {
+    return word && word.text && word.bbox && Number(word.confidence == null ? 100 : word.confidence) >= 18;
+  }) : [];
+  if (!words.length) return base;
+
+  const heights = words.map(function (word) { return Math.max(1, word.bbox.y1 - word.bbox.y0); }).sort(function (a,b){return a-b;});
+  const medianHeight = heights[Math.floor(heights.length / 2)] || 14;
+  const tolerance = Math.max(6, medianHeight * .58);
+  const rows = [];
+
+  words.slice().sort(function (a,b) {
+    const ay=(a.bbox.y0+a.bbox.y1)/2, by=(b.bbox.y0+b.bbox.y1)/2;
+    if (Math.abs(ay-by) > tolerance) return ay-by;
+    return a.bbox.x0-b.bbox.x0;
+  }).forEach(function (word) {
+    const cy=(word.bbox.y0+word.bbox.y1)/2;
+    let row=rows.find(function (entry){return Math.abs(entry.y-cy)<=tolerance;});
+    if(!row){row={y:cy,words:[]};rows.push(row);}
+    row.words.push(word);
+    row.y=(row.y*(row.words.length-1)+cy)/row.words.length;
+  });
+
+  const spatial = rows.sort(function(a,b){return a.y-b.y;}).map(function(row){
+    return row.words.sort(function(a,b){return a.bbox.x0-b.bbox.x0;}).map(function(word){return word.text;}).join(" ");
+  }).map(cleanLine).filter(Boolean).join("\n");
+
+  if (!spatial) return base;
+  if (!base) return spatial;
+  return base + "\n===== SPATIAL LINES =====\n" + spatial;
 }
 
 function normalizeOcrDigits(value) {
@@ -582,28 +615,48 @@ function amountFromLines(lines, pattern, exclude) {
   return candidates[0].amount;
 }
 function isMetadataLine(line) {
-  return /(?:^|\b)(subtotal|sub total|total|grand total|amount due|balance due|tax|sales tax|change|cash|visa|mastercard|amex|discover|debit|credit|tender|payment|approval|auth|transaction|receipt|invoice|order|register|cashier|associate|server|customer|points|rewards|member|loyalty|phone|tel|www\.|http|thank you|items sold|item count)(?:\b|$)/i.test(line);
+  const key = receiptLabelKey(line);
+  return /(?:^|\b)(sub\s*total|subtotal|tota[l1i]|grand\s+tota[l1i]|amount due|balance due|tax|sales tax|change|cash|visa|master\s*card|mastercard|amex|discover|debit|credit|tender|payment|account|acct|authorization|approval|auth|transaction|receipt|invoice|order|register|cashier|associate|server|customer|points|rewards|member|loyalty|phone|tel|www\.|http|thank you|items sold|item count)(?:\b|$)/i.test(key);
+}
+
+function stripTrailingPrice(line) {
+  const text = String(line || "");
+  const patterns = [
+    /[-(]?\s*\$?\s*[\dOoQIl|!SsBbGg]{1,7}(?:,\d{3})*(?:[.,:]\d{2})\)?[^A-Za-z0-9]*$/i,
+    /[-(]?\s*\$?\s*[\dOoQIl|!SsBbGg]{1,7}\s+[\dOoQIl|!SsBbGg]{2}[^A-Za-z0-9]*$/i
+  ];
+  let out=text;
+  patterns.forEach(function(pattern){ out=out.replace(pattern,""); });
+  return cleanLine(out);
 }
 
 function extractItems(lines) {
   const items = [];
   const seen = new Set();
+
   lines.forEach(function (line, index) {
     if (isMetadataLine(line)) return;
-    const values = moneyTokens(line);
+    const values = looseMoneyTokens(line);
     if (!values.length) return;
     const price = values[values.length - 1];
-    let name = line.replace(/[-(]?\s*\$?\s*[\dOoIlBSG]{1,7}(?:,\d{3})*(?:\.\d{2})\)?(?:\s*[A-Z]{1,2})?\s*$/i, "").trim();
-    if ((!name || name.length < 2) && index > 0 && !moneyTokens(lines[index - 1]).length && !isMetadataLine(lines[index - 1])) {
+    if (!Number.isFinite(price) || Math.abs(price) > 100000) return;
+
+    let name = stripTrailingPrice(line);
+    if ((!name || name.length < 2) && index > 0 && !looseMoneyTokens(lines[index - 1]).length && !isMetadataLine(lines[index - 1])) {
       name = lines[index - 1];
     }
+
     name = cleanLine(name)
       .replace(/^[*#~]+\s*/, "")
       .replace(/^\d+\s+(?=[A-Za-z])/, "")
+      .replace(/[\\/|]+\s*$/g, "")
       .replace(/\s+[A-Z]\s*$/i, "")
       .trim();
+
+    const keyName = receiptLabelKey(name);
     if (!name || name.length < 2 || /^\d+$/.test(name) || isMetadataLine(name)) return;
-    if (!Number.isFinite(price) || Math.abs(price) > 100000) return;
+    if (/master\s*card|account|authorization|approval|tender|payment|tota[l1i]|sub\s*total|tax/i.test(keyName)) return;
+
     const key = norm(name) + "|" + Number(price).toFixed(2);
     if (seen.has(key)) return;
     seen.add(key);
@@ -613,7 +666,34 @@ function extractItems(lines) {
       category: guessCategory(name)
     });
   });
+
   return items.slice(0, 120);
+}
+
+function sanitizeItems(items, subtotal, total) {
+  let cleaned=(items || []).filter(function(item){
+    const key=receiptLabelKey(item.name || "");
+    if (/master\s*card|account|authorization|approval|tender|payment|tota[l1i]|sub\s*total|tax/i.test(key)) return false;
+    if (total > 0 && Math.abs(Number(item.price || 0)-total)<=.01 && /card|account|payment|total/i.test(key)) return false;
+    return true;
+  });
+
+  const target=Number(subtotal || 0);
+  if(target>0){
+    let sum=cleaned.reduce(function(totalValue,item){return totalValue+Number(item.price||0);},0);
+    if(sum>target+.08){
+      cleaned=cleaned.filter(function(item){
+        const suspicious=Math.abs(Number(item.price||0)-Number(total||0))<=.01 || Math.abs(Number(item.price||0)-target)<=.01;
+        const key=receiptLabelKey(item.name||"");
+        if(suspicious && /card|payment|total|account|auth/i.test(key)){
+          sum-=Number(item.price||0);
+          return false;
+        }
+        return true;
+      });
+    }
+  }
+  return cleaned;
 }
 
 function paymentMethod(lines) {
@@ -660,6 +740,8 @@ function balanceInfo(parsed) {
     expected: expected,
     difference: difference,
     hasFinancialData: hasFinancialData,
+    itemDifference: subtotal > 0 ? itemSum - subtotal : 0,
+    itemsComplete: subtotal > 0 ? Math.abs(itemSum - subtotal) <= .08 : itemSum > 0,
     balanced: hasFinancialData && total > 0 && Math.abs(difference) <= .08
   };
 }
@@ -668,7 +750,7 @@ function parseReceiptText(rawText) {
   let subtotal = amountFromLines(lines, /\bsub\s*total\b|\bsubtotal\b|\bsub\s*tota[l1i]\b/i);
   let tax = amountFromLines(lines, /\b(?:sales\s*)?tax\b|\bt[a4]x\b/i, /\btax id\b/i);
   let total = amountFromLines(lines, /\b(?:grand\s+tota[l1i]|amount\s+due|balance\s+due|tota[l1i]\s+due|tota[l1i])\b/i, /\b(?:subtotal|sub\s*total|total\s+savings|total\s+discount|total\s+items?)\b/i);
-  const items = extractItems(lines);
+  let items = extractItems(lines);
   const detectedDate = parseDate(lines);
 
   if (!subtotal && total && tax) subtotal = Math.max(0, total - tax);
@@ -700,6 +782,8 @@ function parseReceiptText(rawText) {
     }
   }
 
+  items = sanitizeItems(items, subtotal, total);
+
   const parsed = {
     merchant: merchantFromLines(lines),
     date: detectedDate || todayISO(),
@@ -716,6 +800,8 @@ function parseReceiptText(rawText) {
     dateDetected: !!detectedDate,
     itemSum: Number(balance.itemSum.toFixed(2)),
     balanceDifference: Number(balance.difference.toFixed(2)),
+    itemDifference: Number(balance.itemDifference.toFixed(2)),
+    itemsComplete: balance.itemsComplete,
     balanced: balance.balanced
   };
   return parsed;
@@ -731,7 +817,9 @@ function scoreCandidate(parsed) {
   if (parsed.paymentMethod) score += 4;
   const balance = balanceInfo(parsed);
   if (balance.balanced && parsed.total > 0) score += 12;
-  else if (Math.abs(balance.difference) <= 1) score += 5;
+  else if (balance.hasFinancialData && Math.abs(balance.difference) <= 1) score += 5;
+  if (balance.itemsComplete && (parsed.items || []).length) score += 7;
+  else if (parsed.subtotal > 0 && balance.itemSum > parsed.subtotal + .08) score -= 8;
   return Math.max(0, Math.min(100, score));
 }
 
@@ -836,6 +924,7 @@ function openReview(parsed) {
     "</strong></div><div class='smart-review-badges'>" +
       (ocr ? "<span class='badge " + (ocr >= 75 ? "green" : ocr >= 50 ? "amber" : "red") + "'>OCR " + ocr + "%</span>" : "") +
       "<span class='badge " + summaryClass + "'>Parse " + parseScore + "%</span>" +
+      (meta.itemsComplete === false ? "<span class='badge amber'>Check line items</span>" : "") +
       (duplicate ? "<span class='badge red'>Possible duplicate</span>" : "") +
     "</div></div>" +
     (duplicate ? "<div class='receipt-duplicate-warning'>NEXUS already has a receipt with this merchant, date, and total.</div>" : "") +
@@ -884,15 +973,20 @@ function openReview(parsed) {
     const expected = (subtotal || itemSum) + tax;
     const difference = total - expected;
     const hasFinancialData = itemSum > 0 || subtotal > 0 || tax > 0 || total > 0;
-    const balanced = hasFinancialData && total > 0 && Math.abs(difference) <= .08;
-    const statusClass = !hasFinancialData ? "missing" : balanced ? "ok" : "warn";
+    const totalsBalanced = hasFinancialData && total > 0 && Math.abs(difference) <= .08;
+    const itemDifference = subtotal > 0 ? itemSum - subtotal : 0;
+    const itemsComplete = subtotal > 0 ? Math.abs(itemDifference) <= .08 : itemSum > 0;
+    const fullyBalanced = totalsBalanced && itemsComplete;
+    const statusClass = !hasFinancialData ? "missing" : fullyBalanced ? "ok" : "warn";
+    const statusLabel = !hasFinancialData ? "— Not detected" : fullyBalanced ? "✓ Fully balanced" : totalsBalanced ? "△ Totals balance; items differ" : "△ Total difference";
+    const statusValue = !hasFinancialData ? "Review receipt" : fullyBalanced ? "Looks good" : totalsBalanced ? money(itemDifference) + " vs subtotal" : money(difference);
     modal.querySelector("#smart-reconcile").innerHTML =
       "<div class='smart-reconcile-card " + statusClass + "'>" +
         "<div><span>Items</span><strong>" + money(itemSum) + "</strong></div>" +
         "<div><span>Subtotal</span><strong>" + money(subtotal) + "</strong></div>" +
         "<div><span>Tax</span><strong>" + money(tax) + "</strong></div>" +
         "<div><span>Total</span><strong>" + money(total) + "</strong></div>" +
-        "<div class='smart-reconcile-result'><span>" + (!hasFinancialData ? "— Not detected" : balanced ? "✓ Balanced" : "△ Difference") + "</span><strong>" + (!hasFinancialData ? "Review receipt" : balanced ? "Looks good" : money(difference)) + "</strong></div>" +
+        "<div class='smart-reconcile-result'><span>" + statusLabel + "</span><strong>" + statusValue + "</strong></div>" +
       "</div>";
   }
 
@@ -1148,8 +1242,11 @@ function openScanner() {
             }
             if (message.status) status(pass.name + " · " + message.status.replaceAll("_", " "), true);
           }
+        }, {
+          preserve_interword_spaces: "1",
+          tessedit_pageseg_mode: pass.psm || "4"
         });
-        const rawPassText = result.data.text || "";
+        const rawPassText = structuredOcrText(result.data);
         rawPassTexts.push("===== " + pass.name + " =====\n" + rawPassText);
         const parsed = parseReceiptText(rawPassText);
         parsed.scanMeta = Object.assign({}, parsed.scanMeta || {}, {
