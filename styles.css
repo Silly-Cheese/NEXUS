@@ -1475,3 +1475,60 @@ html {
 .smart-reconcile-card.warn .smart-reconcile-result strong {
   white-space: normal;
 }
+
+/* Bulk + book scanner mobile */
+@media (max-width: 760px) {
+  .bulk-selection-bar {
+    top: 62px;
+    display: grid;
+    align-items: stretch;
+  }
+  .bulk-selection-actions {
+    justify-content: flex-start;
+  }
+  .bulk-field {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+  .bulk-field-enable {
+    padding-top: 0;
+  }
+  .bulk-inline-grid {
+    grid-template-columns: 1fr;
+  }
+  .book-scan-hero {
+    display: grid;
+  }
+  .book-batch-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .book-scan-result {
+    grid-template-columns: 42px minmax(0,1fr);
+  }
+  .book-scan-result img,
+  .book-scan-cover-placeholder {
+    width: 42px;
+    height: 58px;
+  }
+  .book-scan-result-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+@media (max-width: 480px) {
+  .book-batch-grid,
+  .book-search-bar {
+    grid-template-columns: 1fr;
+  }
+  .book-scan-tabs {
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+  }
+  .book-scan-tabs .btn {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .bulk-selection-actions .btn {
+    flex: 1 1 auto;
+  }
+}
