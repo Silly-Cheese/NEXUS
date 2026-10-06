@@ -590,7 +590,7 @@ async function markRecurringPaid(id){
   try{
     const ref=await addDoc(collection(N().db,"transactions"),{
       date:date,type:"expense",merchant:item.merchant||item.name,amount:Number(item.amount||0),category:item.category||"Subscriptions",
-      note:"Recurring obligation · "+(item.note||""),recurringExpenseId:item.id,createdAt:serverTimestamp(),updatedAt:serverTimestamp()
+      spendingClass:"Fixed",note:"Recurring obligation · "+(item.note||""),recurringExpenseId:item.id,createdAt:serverTimestamp(),updatedAt:serverTimestamp()
     });
     if(item.cadence==="one-time"){
       await updateDoc(doc(N().db,"recurringExpenses",id),{active:false,lastPaidAt:serverTimestamp(),updatedAt:serverTimestamp()});
