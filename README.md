@@ -292,3 +292,29 @@ NEXUS remains Firebase Authentication + Cloud Firestore only; the website contin
 - Savings goals default to **Use NEXUS recommendation automatically**, so the amount reserved by the budget recalculates as contributions are recorded and the deadline approaches.
 - A goal may instead use a custom monthly amount; NEXUS still displays the recommended amount for comparison.
 - Current-balance configuration is stored in the owner-only `budgetSettings` collection and is included in NEXUS JSON backup/restore.
+
+
+### Hourly income tracking
+
+Income sources can be configured as **Fixed Amount** or **Hourly Pay**.
+
+Hourly Pay sources support:
+
+- hourly wage
+- pay frequency and next payday
+- current pay-period start and end dates
+- estimated take-home percentage
+- overtime multiplier
+- shift/hour entries throughout the pay period
+- regular and overtime hours
+- live gross earnings estimate
+- live estimated take-home amount
+- monthly Budget estimate that updates as hours are logged
+- actual paycheck entry at the end of the period
+- automatic pay-period rollover after a paycheck is recorded
+- full work-hour history with deletion/correction
+- Quick Add → Work hours
+
+Logging hours only changes projected income. It does **not** change Current Balance until the actual paycheck is recorded as income.
+
+Hourly entries are stored in the owner-only `workHours` Firestore collection and are included in NEXUS JSON backup/restore.
