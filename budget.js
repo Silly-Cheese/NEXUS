@@ -94,6 +94,18 @@ function nextFutureDate(iso,cadence,reference){
   return next;
 }
 
+function advanceRecordedOccurrence(scheduledDate,cadence,recordDate){
+  if(cadence==="one-time") return scheduledDate;
+  let next=advanceDate(scheduledDate||recordDate||todayISO(),cadence);
+  const ref=parseDate(recordDate||todayISO());
+  let guard=0;
+  while(parseDate(next) <= ref && guard<100){
+    next=advanceDate(next,cadence);
+    guard++;
+  }
+  return next;
+}
+
 function datesDueBetween(item,start,end,dateField){
   if(!item || item.active===false) return [];
   let due=String(item[dateField] || "");
@@ -522,7 +534,7 @@ function openIncomeEntry(prefill){
       if(sourceId){
         const source=findById(S().data.incomeSources,sourceId);
         if(source&&source.nextDate&&source.cadence!=="one-time"){
-          const next=nextFutureDate(source.nextDate,source.cadence,data.date);
+          const next=advanceRecordedOccurrence(source.nextDate,source.cadence,data.date);
           await updateDoc(doc(N().db,"incomeSources",sourceId),{nextDate:next,updatedAt:serverTimestamp()});
         }else if(source&&source.cadence==="one-time"){
           await updateDoc(doc(N().db,"incomeSources",sourceId),{active:false,updatedAt:serverTimestamp()});
@@ -595,7 +607,7 @@ async function markRecurringPaid(id){
     if(item.cadence==="one-time"){
       await updateDoc(doc(N().db,"recurringExpenses",id),{active:false,lastPaidAt:serverTimestamp(),updatedAt:serverTimestamp()});
     }else{
-      await updateDoc(doc(N().db,"recurringExpenses",id),{nextDueDate:nextFutureDate(item.nextDueDate,item.cadence,date),lastPaidAt:serverTimestamp(),updatedAt:serverTimestamp()});
+      await updateDoc(doc(N().db,"recurringExpenses",id),{nextDueDate:advanceRecordedOccurrence(item.nextDueDate,item.cadence,date),lastPaidAt:serverTimestamp(),updatedAt:serverTimestamp()});
     }
     await N().writeActivity("budget","Recurring obligation paid","transaction",ref.id,item.name+" · "+money(item.amount));
     await N().refresh(["transactions","recurringExpenses","activity"]);
