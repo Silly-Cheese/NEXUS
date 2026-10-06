@@ -374,12 +374,33 @@ async function stopBarcodeScanner(){
   }
 }
 
-function imageToDataUrl(file){
+function prepareBookPhoto(file){
   return new Promise(function(resolve,reject){
-    const reader=new FileReader();
-    reader.onload=function(){resolve(reader.result);};
-    reader.onerror=function(){reject(new Error("Could not read image."));};
-    reader.readAsDataURL(file);
+    const url=URL.createObjectURL(file);
+    const image=new Image();
+    image.onload=function(){
+      try{
+        const maxDimension=1600;
+        const scale=Math.min(1,maxDimension/Math.max(image.naturalWidth||image.width,image.naturalHeight||image.height));
+        const canvas=document.createElement("canvas");
+        canvas.width=Math.max(1,Math.round((image.naturalWidth||image.width)*scale));
+        canvas.height=Math.max(1,Math.round((image.naturalHeight||image.height)*scale));
+        const ctx=canvas.getContext("2d");
+        ctx.fillStyle="#fff";
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.drawImage(image,0,0,canvas.width,canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas);
+      }catch(error){
+        URL.revokeObjectURL(url);
+        reject(error);
+      }
+    };
+    image.onerror=function(){
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read image."));
+    };
+    image.src=url;
   });
 }
 
@@ -400,8 +421,8 @@ async function scanBookPhoto(file){
   }
   setBookScanStatus("Reading book photo…",true);
   try{
-    const dataUrl=await imageToDataUrl(file);
-    const result=await window.Tesseract.recognize(dataUrl,"eng",{
+    const prepared=await prepareBookPhoto(file);
+    const result=await window.Tesseract.recognize(prepared,"eng",{
       logger:function(message){
         if(message.status)setBookScanStatus("Photo OCR · "+String(message.status).replaceAll("_"," "),true);
       }
