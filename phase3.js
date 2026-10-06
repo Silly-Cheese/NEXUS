@@ -290,6 +290,7 @@ function commandDefinitions() {
   return [
     {name:"Dashboard", hint:"Go to overview", run:function(){N().setActiveView("dashboard");}},
     {name:"Money", hint:"Open spending", run:function(){N().setActiveView("money");}},
+    {name:"Budget", hint:"Income, expenses, safe-to-spend, savings, and daily review", run:function(){N().setActiveView("budget");}},
     {name:"Receipts", hint:"Open receipt inbox", run:function(){N().setActiveView("receipts");}},
     {name:"Assets", hint:"Open physical registry", run:function(){N().setActiveView("assets");}},
     {name:"QR Registry", hint:"Open physical tags", run:function(){N().setActiveView("qr");}},
