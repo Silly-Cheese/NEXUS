@@ -283,3 +283,12 @@ firebase deploy --only firestore:rules
 ```
 
 NEXUS remains Firebase Authentication + Cloud Firestore only; the website continues to be hosted by GitHub Pages.
+
+
+### Balance baseline and goal pacing
+
+- **Current balance:** Budget → Balance (or Quick Add → Current balance) lets the owner enter the amount of money currently on hand. NEXUS stores this as a current snapshot and adjusts the tracked balance using transactions recorded afterward, so historical transactions are not applied twice.
+- **Automatic savings recommendation:** Savings goals with a target amount and target date calculate the monthly amount required to reach the goal from the current saved amount.
+- Savings goals default to **Use NEXUS recommendation automatically**, so the amount reserved by the budget recalculates as contributions are recorded and the deadline approaches.
+- A goal may instead use a custom monthly amount; NEXUS still displays the recommended amount for comparison.
+- Current-balance configuration is stored in the owner-only `budgetSettings` collection and is included in NEXUS JSON backup/restore.
