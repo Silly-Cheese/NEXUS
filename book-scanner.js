@@ -7,7 +7,8 @@ const BOOK_SCAN = {
   queue: [],
   lastCode: "",
   lastCodeAt: 0,
-  busy: false
+  busy: false,
+  searchResults: []
 };
 
 function N(){ return window.NEXUS; }
@@ -276,21 +277,17 @@ function renderQueue(){
 
 function renderSearchResults(results){
   const panel=document.getElementById("book-search-results");
+  BOOK_SCAN.searchResults=Array.isArray(results)?results.slice():[];
   if(!panel) return;
-  if(!results.length){
+  if(!BOOK_SCAN.searchResults.length){
     panel.innerHTML="<div class='inline-note'>No matching books found. Try an ISBN, fewer title words, or add manually.</div>";
     return;
   }
-  panel.innerHTML=results.map(function(book,index){
-    const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(book))));
-    return "<button class='book-search-option' type='button' data-book-search-result='"+encoded+"'>" +
+  panel.innerHTML=BOOK_SCAN.searchResults.map(function(book,index){
+    return "<button class='book-search-option' type='button' data-book-search-result='"+index+"'>" +
       (book.coverUrl ? "<img src='"+esc(book.coverUrl)+"' alt='' loading='lazy'>" : "<span class='book-search-cover'>▥</span>")+
       "<span><strong>"+esc(book.title)+"</strong><small>"+esc(book.author || "Unknown author")+"</small><small>"+esc([book.year,book.isbn].filter(Boolean).join(" · "))+"</small></span><span>＋</span></button>";
   }).join("");
-}
-
-function decodeBook(encoded){
-  try{return JSON.parse(decodeURIComponent(escape(atob(encoded))));}catch(_){return null;}
 }
 
 function locationOptions(){
@@ -494,6 +491,7 @@ function openBookScanner(){
   BOOK_SCAN.queue=[];
   BOOK_SCAN.lastCode="";
   BOOK_SCAN.lastCodeAt=0;
+  BOOK_SCAN.searchResults=[];
 
   const body=
     "<div class='book-scan-hero'><div><div class='eyebrow'>LIBRARY CAPTURE</div><h3>Scan books almost any way</h3><p>Barcode, ISBN, cover/copyright photo, or title/author search. Keep scanning to build a batch.</p></div><span class='badge gold'><span id='book-queue-count'>0</span> queued</span></div>"+
@@ -556,7 +554,7 @@ function openBookScanner(){
   modal.querySelector("#book-search-results").addEventListener("click",function(event){
     const result=event.target.closest("[data-book-search-result]");
     if(!result)return;
-    const book=decodeBook(result.dataset.bookSearchResult);
+    const book=BOOK_SCAN.searchResults[Number(result.dataset.bookSearchResult)];
     if(book && addToQueue(book))N().toast("Added to queue",book.title,"success");
   });
 
