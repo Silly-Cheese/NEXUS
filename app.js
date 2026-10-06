@@ -822,6 +822,7 @@ function openTransactionForm(existing) {
     "<div class='field full'><label>Merchant / source</label><input name='merchant' required maxlength='120' value='" + escapeHtml(existing.merchant || "") + "' placeholder='Walmart'></div>" +
     "<div class='field'><label>Amount</label><input name='amount' type='number' min='0' step='0.01' required value='" + escapeHtml(existing.amount || "") + "' placeholder='0.00'></div>" +
     "<div class='field'><label>Category</label><select name='category'>" + categoryOptions(existing.category || "Other") + "</select></div>" +
+    "<div class='field'><label>Spending class</label><select name='spendingClass'><option value='Flexible' " + ((existing.spendingClass || "Flexible") === "Flexible" ? "selected" : "") + ">Flexible</option><option value='Discretionary' " + (existing.spendingClass === "Discretionary" ? "selected" : "") + ">Discretionary</option><option value='Fixed' " + (existing.spendingClass === "Fixed" ? "selected" : "") + ">Fixed</option><option value='One-time' " + (existing.spendingClass === "One-time" ? "selected" : "") + ">One-time</option><option value='Refundable' " + (existing.spendingClass === "Refundable" ? "selected" : "") + ">Refundable</option></select></div>" +
     "<div class='field full'><label>Note</label><textarea name='note' maxlength='500' placeholder='Optional context'>" + escapeHtml(existing.note || "") + "</textarea></div></form>";
   const modal = openModal(existing.id ? "Edit Transaction" : "Add Transaction", body, {
     footer: "<button class='btn btn-secondary' data-close-modal>Cancel</button><button class='btn btn-primary' id='save-transaction'>Save Transaction</button>"
@@ -835,6 +836,7 @@ function openTransactionForm(existing) {
       merchant: formValue(form, "merchant"),
       amount: Number(formValue(form, "amount")),
       category: formValue(form, "category"),
+      spendingClass: formValue(form, "spendingClass"),
       note: formValue(form, "note"),
       updatedAt: serverTimestamp()
     };
