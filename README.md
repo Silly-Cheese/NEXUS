@@ -241,3 +241,45 @@ NEXUS now renders QR images first, builds a real US-Letter PDF with jsPDF, and t
 - **Calibration PDF** — provides a 1-inch square and 4-inch line for verifying printer scale
 
 This is the preferred mobile flow for GitHub Pages and Android browsers.
+
+
+## Budget & Daily Review
+
+NEXUS includes a first-class Budget system that cross-references actual transactions with expected income, recurring obligations, savings goals, category targets, and current spending pace.
+
+### Budget features
+
+- actual income tracking through NEXUS transactions
+- expected income sources with weekly, biweekly, twice-monthly, monthly, quarterly, annual, and one-time schedules
+- recurring obligations with due dates and **Paid** actions that create the expense transaction and advance the next due date
+- savings goals and dated contribution history
+- monthly category targets as either fixed dollar amounts or percentages of disposable income
+- current income vs. expenses
+- projected month-end expenses and surplus/shortfall
+- recurring money committed before discretionary spending
+- planned savings reserved before safe-to-spend is calculated
+- daily safe-to-spend estimate
+- fixed / flexible / discretionary / one-time / refundable spending classes
+- cutback opportunities based on budget targets, spending pace, and recent history
+- concrete improvement recommendations
+- What-If modeling for weekly spending reductions, extra monthly income, and recurring costs removed
+- Daily Review on the Dashboard and in the Budget page
+- Budget data in NEXUS Search, JSON backup/restore, and Quick Add
+
+### Budget collections
+
+Budget uses these Cloud Firestore collections in addition to the existing NEXUS collections:
+
+- `budgetCategories`
+- `incomeSources`
+- `recurringExpenses`
+- `savingsGoals`
+- `savingsContributions`
+
+The included `firestore.rules` grants the NEXUS owner access to these collections. Deploy the updated rules with:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+NEXUS remains Firebase Authentication + Cloud Firestore only; the website continues to be hosted by GitHub Pages.
