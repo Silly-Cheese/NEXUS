@@ -24,7 +24,8 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
 
-const COLLECTIONS = ["transactions", "receipts", "assets", "qrTags", "books", "locations", "activity", "loans", "finderReports"];
+const COLLECTIONS = ["transactions", "receipts", "assets", "qrTags", "books", "locations", "activity", "loans", "finderReports", "budgetCategories", "incomeSources", "recurringExpenses", "savingsGoals", "savingsContributions"];
+const OPTIONAL_COLLECTIONS = new Set(["budgetCategories", "incomeSources", "recurringExpenses", "savingsGoals", "savingsContributions"]);
 const CATEGORIES = [
   "Groceries", "Dining", "Transportation", "Books", "Electronics", "Household",
   "Personal Care", "Education", "Entertainment", "Subscriptions", "Medical", "Gifts", "Other"
@@ -108,7 +109,7 @@ function toast(title, message, type) {
 }
 
 function humanIcon(type) {
-  return ({ money: "◇", receipt: "▤", asset: "▣", qr: "⌁", book: "▥", location: "⌖", system: "◈", loan: "↗" })[type] || "◈";
+  return ({ money: "◇", budget: "◒", receipt: "▤", asset: "▣", qr: "⌁", book: "▥", location: "⌖", system: "◈", loan: "↗" })[type] || "◈";
 }
 
 async function writeActivity(type, label, entityType, entityId, detail) {
@@ -127,14 +128,23 @@ async function writeActivity(type, label, entityType, entityId, detail) {
 }
 
 async function loadCollection(name) {
-  const snapshot = await getDocs(collection(db, name));
-  const rows = snapshot.docs.map(function (snap) { return Object.assign({ id: snap.id }, snap.data()); });
-  rows.sort(function (a, b) {
-    const ad = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : Date.parse(a.date || a.purchaseDate || a.createdAt || 0) || 0;
-    const bd = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : Date.parse(b.date || b.purchaseDate || b.createdAt || 0) || 0;
-    return bd - ad;
-  });
-  state.data[name] = rows;
+  try {
+    const snapshot = await getDocs(collection(db, name));
+    const rows = snapshot.docs.map(function (snap) { return Object.assign({ id: snap.id }, snap.data()); });
+    rows.sort(function (a, b) {
+      const ad = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : Date.parse(a.date || a.purchaseDate || a.createdAt || 0) || 0;
+      const bd = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : Date.parse(b.date || b.purchaseDate || b.createdAt || 0) || 0;
+      return bd - ad;
+    });
+    state.data[name] = rows;
+  } catch (error) {
+    if (OPTIONAL_COLLECTIONS.has(name) && String(error && error.code || "").includes("permission-denied")) {
+      console.warn("Optional NEXUS collection is not available until its Firestore rules are deployed:", name);
+      state.data[name] = [];
+      return;
+    }
+    throw error;
+  }
 }
 
 async function loadAll() {
@@ -175,6 +185,7 @@ function render() {
   const renderers = {
     dashboard: renderDashboard,
     money: renderMoney,
+    budget: renderBudget,
     receipts: renderReceipts,
     assets: renderAssets,
     qr: renderQr,
@@ -294,6 +305,10 @@ function spendingInsights() {
 function insightCard(item) {
   return "<article class='insight'><div class='insight-label'>" + escapeHtml(item.label) + "</div><strong>" +
     escapeHtml(item.title) + "</strong><p>" + escapeHtml(item.text) + "</p></article>";
+}
+
+function renderBudget() {
+  return "<div id='budget-root' class='budget-root'><section class='card'><div class='eyebrow'>BUDGET</div><h2>Loading your budget…</h2><p class='muted'>Income, expenses, goals, and recurring obligations are being cross-referenced.</p></section></div>";
 }
 
 function renderMoney() {
@@ -781,6 +796,7 @@ function openQuickAdd() {
   const body = "<div class='grid grid-2'>" +
     quickTile("scan-receipt", "▤", "Scan receipt", "Extract a purchase from paper") +
     quickTile("add-transaction", "◇", "Transaction", "Record spending manually") +
+    quickTile("add-income", "↥", "Income", "Record money coming in") +
     quickTile("add-asset", "▣", "Asset", "Register something you own") +
     quickTile("add-book", "▥", "Book", "Catalog a book") +
     quickTile("add-location", "⌖", "Location", "Add a shelf, drawer, room, or box") +
