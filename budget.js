@@ -258,6 +258,11 @@ function snapshot(){
   });
 
   const byCategory=categorySpending(key);
+  const spendingClasses={};
+  expenseRows.forEach(function(row){
+    const cls=row.spendingClass || (row.recurringExpenseId ? "Fixed" : "Flexible");
+    spendingClasses[cls]=(spendingClasses[cls]||0)+Number(row.amount||0);
+  });
   const day=elapsedDays();
   const monthDays=daysInCurrentMonth();
   const paceProjection=actualExpenses/day*monthDays;
@@ -284,7 +289,7 @@ function snapshot(){
     actualIncome:actualIncome,actualExpenses:actualExpenses,expectedIncome:expectedIncome,budgetIncome:budgetIncome,unplannedIncome:unplannedIncome,
     recurringMonthly:recurringMonthly,upcomingRecurring:upcomingRecurring,futureRecurring:futureRecurring,
     savingsTarget:savingsTarget,savingsActual:savingsActual,savingsRemaining:savingsRemaining,reservedSavings:reservedSavings,
-    disposableIncome:disposableIncome,byCategory:byCategory,categoryTargets:categoryTargets,categoryRows:categoryRows,
+    disposableIncome:disposableIncome,byCategory:byCategory,spendingClasses:spendingClasses,categoryTargets:categoryTargets,categoryRows:categoryRows,
     paceProjection:paceProjection,projectedExpenses:projectedExpenses,projectedSurplus:projectedSurplus,
     remainingPool:remainingPool,safeDaily:safeDaily,day:day,monthDays:monthDays,remainingDays:remainingDays()
   };
@@ -432,6 +437,28 @@ function dailyReviewMarkup(snap){
   "</section>";
 }
 
+function cashFlowPlanMarkup(snap){
+  return "<section class='card'><div class='card-title-row'><div><h2>Cash Flow Plan</h2><div class='microcopy'>Where this month's expected money is already committed</div></div></div>"+
+    "<div class='budget-flow-list'>"+
+      "<div><span>Budgeted income</span><strong>"+money(snap.budgetIncome)+"</strong></div>"+
+      "<div><span>Recurring obligations</span><strong>- "+money(snap.recurringMonthly)+"</strong></div>"+
+      "<div><span>Planned savings</span><strong>- "+money(snap.reservedSavings)+"</strong></div>"+
+      "<div class='budget-flow-emphasis'><span>Flexible monthly pool</span><strong>"+money(Math.max(0,snap.disposableIncome))+"</strong></div>"+
+      "<div><span>Actually spent</span><strong>- "+money(snap.actualExpenses)+"</strong></div>"+
+      "<div class='budget-flow-emphasis'><span>Remaining after upcoming commitments</span><strong>"+money(snap.remainingPool)+"</strong></div>"+
+    "</div></section>";
+}
+
+function spendingClassMarkup(snap){
+  const classes=["Fixed","Flexible","Discretionary","One-time","Refundable"];
+  return "<section class='card'><div class='card-title-row'><div><h2>Spending Mix</h2><div class='microcopy'>Manual and automatic expense classifications this month</div></div></div>"+
+    "<div class='budget-class-grid'>"+classes.map(function(cls){
+      const value=Number(snap.spendingClasses[cls]||0);
+      const pct=snap.actualExpenses?value/snap.actualExpenses*100:0;
+      return "<div><span>"+esc(cls)+"</span><strong>"+money(value)+"</strong><small>"+pct.toFixed(0)+"% of spending</small></div>";
+    }).join("")+"</div></section>";
+}
+
 function categoryBudgetMarkup(snap){
   const rows=snap.categoryRows.filter(function(row){return row.limit>0||row.spent>0;});
   return "<section class='card'><div class='card-title-row'><div><h2>Category Budget</h2><div class='microcopy'>Actual spending vs monthly target and current pace</div></div><button class='btn btn-small btn-secondary' data-budget-action='category-form'>＋ Target</button></div>"+
@@ -498,6 +525,7 @@ function renderBudget(){
     "<div class='view-header'><div><div class='eyebrow'>BUDGET</div><h1>Budget & Cash Flow</h1><p>Income and expenses cross-referenced with commitments, savings, category targets, and spending pace.</p></div><div class='actions'><button class='btn btn-secondary' data-budget-action='what-if'>What If?</button><button class='btn btn-secondary' data-budget-action='income-source-form'>Income Source</button><button class='btn btn-primary' data-budget-action='income-entry'>＋ Income</button></div></div>"+
     summaryCards(snap)+
     "<div class='section-gap'>"+dailyReviewMarkup(snap)+"</div>"+
+    "<div class='grid grid-2 section-gap'>"+cashFlowPlanMarkup(snap)+spendingClassMarkup(snap)+"</div>"+
     "<div class='grid grid-2 section-gap'>"+categoryBudgetMarkup(snap)+incomeMarkup(snap)+"</div>"+
     "<div class='grid grid-2 section-gap'>"+recurringMarkup(snap)+savingsMarkup(snap)+"</div>"+
     cutbackMarkup(snap);
