@@ -98,7 +98,11 @@ function hourlyPeriodStats(source){
   const takeHomePercent=Math.max(0,Math.min(100,Number(source&&source.takeHomePercent == null ? 100 : source.takeHomePercent)));
   const regularHours=logs.reduce(function(sum,log){return sum+Number(log.hours||0);},0);
   const overtimeHours=logs.reduce(function(sum,log){return sum+Number(log.overtimeHours||0);},0);
-  const gross=regularHours*hourlyRate + overtimeHours*hourlyRate*overtimeMultiplier;
+  const gross=logs.reduce(function(sum,log){
+    const logRate=Number(log.hourlyRate==null?hourlyRate:log.hourlyRate);
+    const logMultiplier=Number(log.overtimeMultiplier==null?overtimeMultiplier:log.overtimeMultiplier);
+    return sum + Number(log.hours||0)*logRate + Number(log.overtimeHours||0)*logRate*logMultiplier;
+  },0);
   const estimatedNet=gross*(takeHomePercent/100);
   return {
     logs:logs,regularHours:regularHours,overtimeHours:overtimeHours,totalHours:regularHours+overtimeHours,
@@ -734,6 +738,21 @@ function openIncomeEntry(prefill){
   });
 }
 
+function openQuickHours(){
+  const sources=S().data.incomeSources.filter(function(source){return source.active!==false && source.payType==="hourly";});
+  if(!sources.length){
+    N().toast("No hourly income source","Create an Hourly Pay income source first.","error");
+    N().setActiveView("budget");
+    return;
+  }
+  if(sources.length===1){openHoursForm(sources[0].id);return;}
+  const body="<div class='panel-list'>"+sources.map(function(source){
+    const stats=hourlyPeriodStats(source);
+    return "<button class='list-row hourly-source-picker' type='button' data-budget-action='log-hours' data-id='"+esc(source.id)+"'><div><div class='list-title'>"+esc(source.name)+"</div><div class='list-sub'>"+money(source.hourlyRate)+"/hr · "+stats.totalHours.toFixed(2)+"h this period</div></div><strong>"+money(stats.estimatedNet)+" est.</strong></button>";
+  }).join("")+"</div>";
+  N().openModal("Log Work Hours",body,{footer:"<button class='btn btn-secondary' data-close-modal>Cancel</button>"});
+}
+
 function openIncomeSourceForm(id){
   const existing=findById(S().data.incomeSources,id)||{};
   const payType=existing.payType||"fixed";
@@ -842,6 +861,7 @@ function openHoursForm(id){
     if(!form.reportValidity())return;
     const hours=Number(formValue(form,"hours")||0),overtimeHours=Number(formValue(form,"overtimeHours")||0);
     if(hours+overtimeHours<=0){N().toast("Enter hours","Add at least some regular or overtime hours.","error");return;}
+    if(hours+overtimeHours>24){N().toast("Check the hours","A single work-day entry cannot exceed 24 total hours.","error");return;}
     const gross=hours*Number(source.hourlyRate||0)+overtimeHours*Number(source.hourlyRate||0)*Number(source.overtimeMultiplier||1.5);
     await addDoc(collection(N().db,"workHours"),{
       sourceId:source.id,sourceName:source.name,date:formValue(form,"date"),hours:hours,overtimeHours:overtimeHours,
@@ -1125,11 +1145,11 @@ function openWhatIf(){
 }
 
 function handleAction(event){
-  const button=event.target.closest("[data-budget-action],[data-quick='add-income'],[data-quick='add-recurring'],[data-quick='add-savings-goal'],[data-quick='add-budget-target'],[data-quick='set-starting-balance']");
+  const button=event.target.closest("[data-budget-action],[data-quick='add-income'],[data-quick='add-recurring'],[data-quick='add-savings-goal'],[data-quick='add-budget-target'],[data-quick='set-starting-balance'],[data-quick='log-work-hours']");
   if(!button)return;
   if(button.matches("[data-quick]")){
     const quick=button.dataset.quick;
-    if(["add-income","add-recurring","add-savings-goal","add-budget-target","set-starting-balance"].includes(quick)){
+    if(["add-income","add-recurring","add-savings-goal","add-budget-target","set-starting-balance","log-work-hours"].includes(quick)){
       event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
       N().closeModal();
       setTimeout(function(){
@@ -1138,6 +1158,7 @@ function handleAction(event){
         if(quick==="add-savings-goal")openGoalForm();
         if(quick==="add-budget-target")openCategoryForm();
         if(quick==="set-starting-balance")openStartingBalance();
+        if(quick==="log-work-hours")openQuickHours();
       },0);
       return;
     }
