@@ -1083,6 +1083,7 @@ function openReview(parsed) {
         amount: receipt.total,
         category: dominantCategory(items),
         type: "expense",
+        spendingClass: "Flexible",
         note: receipt.note,
         sourceReceiptId: ref.id,
         createdAt: serverTimestamp(),
