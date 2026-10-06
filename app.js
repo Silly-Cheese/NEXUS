@@ -1466,14 +1466,20 @@ function openBookForm(existing, prefillIsbn) {
   const body = "<form id='book-form' class='form-grid'>" +
     "<div class='field full'><label>ISBN</label><div style='display:flex;gap:8px'><input name='isbn' value='" + escapeHtml(existing.isbn || "") + "' placeholder='978…'><button class='btn btn-secondary' type='button' id='lookup-isbn'>Lookup</button></div><div class='field-hint'>Metadata lookup uses Open Library when available.</div></div>" +
     "<div class='field full'><label>Title</label><input name='title' required value='" + escapeHtml(existing.title || "") + "'></div>" +
+    "<div class='field full'><label>Subtitle</label><input name='subtitle' value='" + escapeHtml(existing.subtitle || "") + "'></div>" +
     "<div class='field'><label>Author</label><input name='author' value='" + escapeHtml(existing.author || "") + "'></div>" +
     "<div class='field'><label>Publisher</label><input name='publisher' value='" + escapeHtml(existing.publisher || "") + "'></div>" +
     "<div class='field'><label>Publication year</label><input name='year' value='" + escapeHtml(existing.year || "") + "'></div>" +
+    "<div class='field'><label>Edition</label><input name='edition' value='" + escapeHtml(existing.edition || "") + "' placeholder='2nd, Revised, Study Edition…'></div>" +
+    "<div class='field'><label>Pages</label><input name='pageCount' type='number' min='0' value='" + escapeHtml(existing.pageCount || "") + "'></div>" +
+    "<div class='field'><label>Language</label><input name='language' value='" + escapeHtml(existing.language || "") + "' placeholder='en'></div>" +
     "<div class='field'><label>Format</label><select name='format'>" + ["Hardcover", "Paperback", "Leather / Imitation Leather", "Spiral", "Other"].map(function (c) { return "<option " + (c === (existing.format || "Hardcover") ? "selected" : "") + ">" + c + "</option>"; }).join("") + "</select></div>" +
     "<div class='field'><label>Shelf / location</label><select name='locationId'>" + locationOptions(existing.locationId) + "</select></div>" +
     "<div class='field'><label>Reading status</label><select name='readingStatus'>" + ["Unread", "Reading", "Finished", "Reference"].map(function (c) { return "<option " + (c === (existing.readingStatus || "Unread") ? "selected" : "") + ">" + c + "</option>"; }).join("") + "</select></div>" +
     "<div class='field'><label>Purchase price</label><input name='purchasePrice' type='number' min='0' step='0.01' value='" + escapeHtml(existing.purchasePrice || "") + "'></div>" +
     "<div class='field full'><label>Collections</label><input name='collections' value='" + escapeHtml((existing.collections || []).join(", ")) + "' placeholder='Theology, Apologetics, Favorites'></div>" +
+    "<div class='field full'><label>Subjects</label><input name='subjects' value='" + escapeHtml((existing.subjects || []).join(", ")) + "' placeholder='Theology, Church history, Apologetics'></div>" +
+    "<div class='field full'><label>Description</label><textarea name='description'>" + escapeHtml(existing.description || "") + "</textarea></div>" +
     "<div class='field full'><label>Notes</label><textarea name='notes'>" + escapeHtml(existing.notes || "") + "</textarea></div>" +
     (!existing.id ? "<label class='check-row full'><input type='checkbox' name='createQr' checked> Create a book QR label automatically</label>" : "") +
     "</form>";
@@ -1493,7 +1499,13 @@ function openBookForm(existing, prefillIsbn) {
       if (data.author) form.elements.author.value = data.author;
       if (data.publisher) form.elements.publisher.value = data.publisher;
       if (data.year) form.elements.year.value = data.year;
-      toast("Metadata found", "Review the fields before saving.", "success");
+      if (data.subtitle && form.elements.subtitle) form.elements.subtitle.value = data.subtitle;
+      if (data.edition && form.elements.edition) form.elements.edition.value = data.edition;
+      if (data.pageCount && form.elements.pageCount) form.elements.pageCount.value = data.pageCount;
+      if (data.language && form.elements.language) form.elements.language.value = data.language;
+      if (data.subjects && form.elements.subjects) form.elements.subjects.value = data.subjects.join(", ");
+      if (data.description && form.elements.description) form.elements.description.value = data.description;
+      toast("Metadata found", "NEXUS checked multiple book catalogs. Review the fields before saving.", "success");
     } catch (error) {
       toast("No metadata found", "You can still enter the book manually.", "error");
     } finally {
@@ -1504,11 +1516,15 @@ function openBookForm(existing, prefillIsbn) {
     const form = $("#book-form", modal);
     if (!form.reportValidity()) return;
     const data = {
-      isbn: formValue(form, "isbn").replace(/[^0-9Xx]/g, ""), title: formValue(form, "title"), author: formValue(form, "author"),
-      publisher: formValue(form, "publisher"), year: formValue(form, "year"), format: formValue(form, "format"),
+      isbn: formValue(form, "isbn").replace(/[^0-9Xx]/g, ""), title: formValue(form, "title"), subtitle: formValue(form, "subtitle"), author: formValue(form, "author"),
+      publisher: formValue(form, "publisher"), year: formValue(form, "year"), edition: formValue(form, "edition"),
+      pageCount: Number(formValue(form, "pageCount") || 0), language: formValue(form, "language"), format: formValue(form, "format"),
       locationId: formValue(form, "locationId") || null, readingStatus: formValue(form, "readingStatus"),
       purchasePrice: Number(formValue(form, "purchasePrice") || 0),
       collections: formValue(form, "collections").split(",").map(function (x) { return x.trim(); }).filter(Boolean),
+      subjects: formValue(form, "subjects").split(",").map(function (x) { return x.trim(); }).filter(Boolean),
+      description: formValue(form, "description"), coverUrl: existing.coverUrl || "",
+      metadataSources: Array.isArray(existing.metadataSources) ? existing.metadataSources : [],
       notes: formValue(form, "notes"), updatedAt: serverTimestamp()
     };
     let id = existing.id;
@@ -1527,24 +1543,67 @@ function openBookForm(existing, prefillIsbn) {
 }
 
 async function lookupIsbn(isbn) {
-  const response = await fetch("https://openlibrary.org/isbn/" + encodeURIComponent(isbn) + ".json");
-  if (!response.ok) throw new Error("Not found");
-  const book = await response.json();
-  let author = "";
-  if (book.authors && book.authors[0] && book.authors[0].key) {
-    try {
-      const a = await fetch("https://openlibrary.org" + book.authors[0].key + ".json");
-      if (a.ok) author = (await a.json()).name || "";
-    } catch (_) {}
-  }
-  const publishDate = String(book.publish_date || "");
-  const yearMatch = publishDate.match(/\b(1[5-9]\d{2}|20\d{2}|21\d{2})\b/);
-  return {
-    title: book.title || "",
-    author: author,
-    publisher: book.publishers && book.publishers[0] || "",
-    year: yearMatch ? yearMatch[0] : publishDate
-  };
+  isbn = String(isbn || "").replace(/[^0-9Xx]/g, "");
+  const results = await Promise.allSettled([
+    (async function () {
+      const response = await fetch("https://openlibrary.org/isbn/" + encodeURIComponent(isbn) + ".json");
+      if (!response.ok) throw new Error("Open Library not found");
+      const book = await response.json();
+      let author = "";
+      if (book.authors && book.authors[0] && book.authors[0].key) {
+        try {
+          const a = await fetch("https://openlibrary.org" + book.authors[0].key + ".json");
+          if (a.ok) author = (await a.json()).name || "";
+        } catch (_) {}
+      }
+      const publishDate = String(book.publish_date || "");
+      const yearMatch = publishDate.match(/\b(1[5-9]\d{2}|20\d{2}|21\d{2})\b/);
+      return {
+        title: book.title || "", subtitle: book.subtitle || "", author: author,
+        publisher: book.publishers && book.publishers[0] || "",
+        year: yearMatch ? yearMatch[0] : publishDate,
+        pageCount: Number(book.number_of_pages || 0),
+        language: book.languages && book.languages[0] && book.languages[0].key ? String(book.languages[0].key).split("/").pop() : "",
+        subjects: Array.isArray(book.subjects) ? book.subjects.slice(0, 30) : [],
+        description: typeof book.description === "string" ? book.description : book.description && book.description.value || "",
+        coverUrl: book.covers && book.covers[0] ? "https://covers.openlibrary.org/b/id/" + book.covers[0] + "-M.jpg" : "",
+        metadataSources: ["Open Library"]
+      };
+    })(),
+    (async function () {
+      const response = await fetch("https://www.googleapis.com/books/v1/volumes?q=isbn:" + encodeURIComponent(isbn) + "&maxResults=5");
+      if (!response.ok) throw new Error("Google Books lookup failed");
+      const data = await response.json();
+      if (!data.items || !data.items.length) throw new Error("Google Books not found");
+      const info = data.items[0].volumeInfo || {};
+      const yearMatch = String(info.publishedDate || "").match(/\b(1[5-9]\d{2}|20\d{2}|21\d{2})\b/);
+      return {
+        title: info.title || "", subtitle: info.subtitle || "",
+        author: Array.isArray(info.authors) ? info.authors.join(", ") : "",
+        publisher: info.publisher || "", year: yearMatch ? yearMatch[0] : String(info.publishedDate || ""),
+        pageCount: Number(info.pageCount || 0), language: info.language || "",
+        subjects: Array.isArray(info.categories) ? info.categories.slice(0, 30) : [],
+        description: info.description || "",
+        coverUrl: info.imageLinks && (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail) || "",
+        metadataSources: ["Google Books"]
+      };
+    })()
+  ]);
+
+  let merged = { title:"", subtitle:"", author:"", publisher:"", year:"", pageCount:0, language:"", subjects:[], description:"", coverUrl:"", metadataSources:[] };
+  results.forEach(function (result) {
+    if (result.status !== "fulfilled") return;
+    const book = result.value;
+    ["title","subtitle","author","publisher","year","language","description","coverUrl"].forEach(function (key) {
+      if (!merged[key] && book[key]) merged[key] = book[key];
+    });
+    if (!merged.pageCount && book.pageCount) merged.pageCount = book.pageCount;
+    merged.subjects = Array.from(new Set(merged.subjects.concat(book.subjects || []))).slice(0,30);
+    merged.metadataSources = Array.from(new Set(merged.metadataSources.concat(book.metadataSources || [])));
+  });
+
+  if (!merged.title) throw new Error("Not found");
+  return merged;
 }
 
 function openLoanBook(bookId) {
