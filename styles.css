@@ -430,7 +430,7 @@ tbody tr:hover { background: rgba(255,255,255,.018); }
   .view-header h1 { font-size:25px; }
   .mobile-nav {
     position:fixed; z-index:40; bottom:0; left:0; right:0; height:64px;
-    display:grid; grid-template-columns:repeat(6,1fr); background:rgba(14,17,21,.96);
+    display:grid; grid-template-columns:repeat(5,1fr); background:rgba(14,17,21,.96);
     border-top:1px solid var(--border); backdrop-filter:blur(16px); padding-bottom:env(safe-area-inset-bottom);
   }
   .mobile-nav button {
