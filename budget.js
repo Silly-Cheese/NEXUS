@@ -62,6 +62,15 @@ function monthlyEquivalent(amount,cadence){
   return amount;
 }
 
+function plannedMonthlyAmount(item,dateField){
+  if(!item || item.active===false) return 0;
+  if(item.cadence==="one-time"){
+    const date=item[dateField];
+    return date && monthKey(date)===currentMonthKey() ? Number(item.amount||0) : 0;
+  }
+  return monthlyEquivalent(item.amount,item.cadence);
+}
+
 function advanceDate(iso,cadence){
   const d=parseDate(iso || todayISO());
   if(cadence==="weekly") d.setDate(d.getDate()+7);
@@ -185,11 +194,11 @@ function snapshot(){
   const actualExpenses=sumAmounts(expenseRows);
 
   const activeIncomeSources=S().data.incomeSources.filter(function(x){return x.active!==false;});
-  const expectedIncome=activeIncomeSources.reduce(function(sum,x){return sum+monthlyEquivalent(x.amount,x.cadence);},0);
+  const expectedIncome=activeIncomeSources.reduce(function(sum,x){return sum+plannedMonthlyAmount(x,"nextDate");},0);
   const budgetIncome=expectedIncome>0?Math.max(actualIncome,expectedIncome):actualIncome;
 
   const activeRecurring=S().data.recurringExpenses.filter(function(x){return x.active!==false;});
-  const recurringMonthly=activeRecurring.reduce(function(sum,x){return sum+monthlyEquivalent(x.amount,x.cadence);},0);
+  const recurringMonthly=activeRecurring.reduce(function(sum,x){return sum+plannedMonthlyAmount(x,"nextDueDate");},0);
   const dueStart=parseDate(todayISO());
   const dueEnd=monthEnd();
   const upcomingRecurring=[];
@@ -400,7 +409,7 @@ function incomeMarkup(snap){
   const actual=snap.incomeRows.slice().sort(function(a,b){return String(b.date).localeCompare(String(a.date));});
   return "<section class='card'><div class='card-title-row'><div><h2>Income Tracker</h2><div class='microcopy'>Expected income and actual money received</div></div><div class='row-actions'><button class='btn btn-small btn-secondary' data-budget-action='income-source-form'>＋ Source</button><button class='btn btn-small btn-primary' data-budget-action='income-entry'>＋ Income</button></div></div>"+
     (sources.length?"<div class='budget-subsection'><div class='eyebrow'>EXPECTED SOURCES</div><div class='panel-list'>"+sources.map(function(source){
-      return "<div class='list-row'><div><div class='list-title'>"+esc(source.name)+"</div><div class='list-sub'>"+money(source.amount)+" · "+esc(source.cadence||"monthly")+(source.nextDate?" · next "+N().dateText(source.nextDate):"")+"</div></div><div class='row-actions'><strong>"+money(monthlyEquivalent(source.amount,source.cadence))+"/mo</strong><button class='btn btn-small btn-primary' data-budget-action='record-source-payment' data-id='"+esc(source.id)+"'>Record</button><button class='btn btn-small btn-ghost' data-budget-action='income-source-form' data-id='"+esc(source.id)+"'>Edit</button></div></div>";
+      return "<div class='list-row'><div><div class='list-title'>"+esc(source.name)+"</div><div class='list-sub'>"+money(source.amount)+" · "+esc(source.cadence||"monthly")+(source.nextDate?" · next "+N().dateText(source.nextDate):"")+"</div></div><div class='row-actions'><strong>"+money(plannedMonthlyAmount(source,"nextDate"))+"/mo</strong><button class='btn btn-small btn-primary' data-budget-action='record-source-payment' data-id='"+esc(source.id)+"'>Record</button><button class='btn btn-small btn-ghost' data-budget-action='income-source-form' data-id='"+esc(source.id)+"'>Edit</button></div></div>";
     }).join("")+"</div></div>":"<div class='inline-note'>Add recurring or expected income sources to make projections useful before the money actually arrives.</div>")+
     "<div class='divider'></div><div class='budget-subsection'><div class='eyebrow'>ACTUAL THIS MONTH</div>"+
       (actual.length?"<div class='panel-list'>"+actual.slice(0,8).map(function(row){
