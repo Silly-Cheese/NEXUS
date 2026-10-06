@@ -1,5 +1,5 @@
 import {
-  collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
+  collection, addDoc, updateDoc, deleteDoc, setDoc, doc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const EXPENSE_CATEGORIES = [
@@ -246,7 +246,7 @@ function snapshot(){
   const futureRecurring=upcomingRecurring.reduce(function(sum,x){return sum+x.amount;},0);
 
   const activeGoals=S().data.savingsGoals.filter(function(x){return x.active!==false;});
-  const savingsTarget=activeGoals.reduce(function(sum,x){return sum+Number(x.monthlyContribution||0);},0);
+  const savingsTarget=activeGoals.reduce(function(sum,x){return sum+monthlyPlanForGoal(x);},0);
   const savingsActual=actualSavingsForMonth(key);
   const savingsRemaining=Math.max(0,savingsTarget-savingsActual);
   const reservedSavings=Math.max(savingsTarget,savingsActual);
@@ -271,6 +271,7 @@ function snapshot(){
   const projectedSurplus=budgetIncome-projectedExpenses-reservedSavings;
   const remainingPool=budgetIncome-actualExpenses-futureRecurring-reservedSavings;
   const safeDaily=Math.max(0,remainingPool/remainingDays());
+  const trackedBalance=currentTrackedBalance();
 
   const categoryRows=Object.keys(Object.assign({},byCategory,categoryTargets)).map(function(category){
     const spent=Number(byCategory[category]||0);
@@ -291,7 +292,7 @@ function snapshot(){
     savingsTarget:savingsTarget,savingsActual:savingsActual,savingsRemaining:savingsRemaining,reservedSavings:reservedSavings,
     disposableIncome:disposableIncome,byCategory:byCategory,spendingClasses:spendingClasses,categoryTargets:categoryTargets,categoryRows:categoryRows,
     paceProjection:paceProjection,projectedExpenses:projectedExpenses,projectedSurplus:projectedSurplus,
-    remainingPool:remainingPool,safeDaily:safeDaily,day:day,monthDays:monthDays,remainingDays:remainingDays()
+    remainingPool:remainingPool,safeDaily:safeDaily,trackedBalance:trackedBalance,day:day,monthDays:monthDays,remainingDays:remainingDays()
   };
 }
 
@@ -412,7 +413,10 @@ function budgetProgress(label,spent,limit,projected){
 
 function summaryCards(snap){
   const surplusType=snap.projectedSurplus<0?"red":snap.projectedSurplus>0?"green":"";
-  return "<div class='grid grid-4'>"+
+  const balanceValue=snap.trackedBalance==null?"Not set":money(snap.trackedBalance);
+  const balanceFoot=snap.trackedBalance==null?"Set your current balance so NEXUS can track money on hand":"Updated from transactions recorded after your balance baseline";
+  return "<div class='budget-summary-grid'>"+
+    "<section class='card stat-card budget-balance-card'><div class='card-title-row'><span class='stat-label'>Current balance</span><span class='stat-icon'>¤</span></div><div><div class='stat-value'>"+esc(balanceValue)+"</div><div class='stat-foot'>"+esc(balanceFoot)+"</div></div></section>"+
     "<section class='card stat-card'><div class='card-title-row'><span class='stat-label'>Income this month</span><span class='stat-icon'>↥</span></div><div><div class='stat-value'>"+money(snap.actualIncome)+"</div><div class='stat-foot'>"+(snap.expectedIncome?money(snap.expectedIncome)+" expected monthly":"No income plan yet")+"</div></div></section>"+
     "<section class='card stat-card'><div class='card-title-row'><span class='stat-label'>Expenses this month</span><span class='stat-icon'>↧</span></div><div><div class='stat-value'>"+money(snap.actualExpenses)+"</div><div class='stat-foot'>"+money(snap.projectedExpenses)+" projected</div></div></section>"+
     "<section class='card stat-card'><div class='card-title-row'><span class='stat-label'>Projected surplus</span><span class='stat-icon'>◒</span></div><div><div class='stat-value "+surplusType+"'>"+money(snap.projectedSurplus)+"</div><div class='stat-foot'>After planned savings</div></div></section>"+
@@ -429,6 +433,7 @@ function dailyReviewMarkup(snap){
   return "<section class='card budget-daily-review'><div class='card-title-row'><div><div class='eyebrow'>DAILY REVIEW</div><h2>"+new Date().toLocaleDateString([], {weekday:"long",month:"long",day:"numeric"})+"</h2><div class='microcopy'>A quick read of income, expenses, commitments, savings, and attention items.</div></div><button class='btn btn-small btn-secondary' data-budget-action='daily-review'>Open Review</button></div>"+
     "<div class='budget-review-grid'>"+
       "<div><span>Yesterday</span><strong>"+money(review.yesterdaySpend)+" spent</strong></div>"+
+      "<div><span>Current balance</span><strong>"+(snap.trackedBalance==null?"Not set":money(snap.trackedBalance))+"</strong></div>"+
       "<div><span>Month cash flow</span><strong>"+money(snap.actualIncome-snap.actualExpenses)+"</strong></div>"+
       "<div><span>Safe today</span><strong>"+money(snap.safeDaily)+"</strong></div>"+
       "<div><span>Needs attention</span><strong>"+review.attention+"</strong></div>"+
@@ -495,11 +500,20 @@ function recurringMarkup(snap){
 
 function savingsMarkup(snap){
   const goals=S().data.savingsGoals.filter(function(x){return x.active!==false;});
-  return "<section class='card'><div class='card-title-row'><div><h2>Savings Goals</h2><div class='microcopy'>Savings are reserved before NEXUS calculates safe discretionary spending</div></div><button class='btn btn-small btn-secondary' data-budget-action='goal-form'>＋ Goal</button></div>"+
+  return "<section class='card'><div class='card-title-row'><div><h2>Savings Goals</h2><div class='microcopy'>NEXUS calculates what you should save each month to hit the target date</div></div><button class='btn btn-small btn-secondary' data-budget-action='goal-form'>＋ Goal</button></div>"+
     (goals.length?"<div class='budget-goals'>"+goals.map(function(goal){
       const pct=progressPct(Number(goal.currentAmount||0),Number(goal.targetAmount||0));
-      return "<article class='budget-goal'><div class='card-title-row'><div><strong>"+esc(goal.name)+"</strong><div class='microcopy'>"+money(goal.currentAmount||0)+" of "+money(goal.targetAmount||0)+(goal.targetDate?" · target "+N().dateText(goal.targetDate):"")+"</div></div>"+badge(pct.toFixed(0)+"%","gold")+"</div><div class='budget-track'><span style='width:"+pct.toFixed(1)+"%'></span></div><div class='budget-goal-foot'><span>"+money(goal.monthlyContribution||0)+"/month planned</span><div class='row-actions'><button class='btn btn-small btn-primary' data-budget-action='goal-contribute' data-id='"+esc(goal.id)+"'>Contribute</button><button class='btn btn-small btn-ghost' data-budget-action='goal-form' data-id='"+esc(goal.id)+"'>Edit</button></div></div></article>";
-    }).join("")+"</div>":"<div class='empty-state'><strong>No savings goals</strong><div>Add a goal and NEXUS will reserve its monthly contribution before calculating safe-to-spend.</div></div>")+
+      const recommended=requiredMonthlyForGoal(goal);
+      const planned=monthlyPlanForGoal(goal);
+      const mode=goal.savingsPlanMode||"recommended";
+      const months=goal.targetDate?monthsUntilGoal(goal.targetDate):0;
+      const shortfall=Math.max(0,recommended-planned);
+      return "<article class='budget-goal'><div class='card-title-row'><div><strong>"+esc(goal.name)+"</strong><div class='microcopy'>"+money(goal.currentAmount||0)+" of "+money(goal.targetAmount||0)+(goal.targetDate?" · target "+N().dateText(goal.targetDate):"")+"</div></div>"+badge(pct.toFixed(0)+"%","gold")+"</div>"+
+        "<div class='budget-track'><span style='width:"+pct.toFixed(1)+"%'></span></div>"+
+        "<div class='budget-goal-plan'><div><span>NEXUS recommendation</span><strong>"+(goal.targetDate?money(recommended)+"/month":"Set a target date")+"</strong><small>"+(goal.targetDate?(months+" month"+(months===1?"":"s")+" remaining"):"Needed to calculate the monthly amount")+"</small></div>"+
+        "<div><span>Budget is reserving</span><strong>"+money(planned)+"/month</strong><small>"+(mode==="custom"?(shortfall>0?money(shortfall)+"/month below recommendation":"Custom plan"):"Automatically follows recommendation")+"</small></div></div>"+
+        "<div class='budget-goal-foot'><span>"+(Number(goal.targetAmount||0)<=Number(goal.currentAmount||0)?"Goal funded":"Keep contributing to stay on pace")+"</span><div class='row-actions'><button class='btn btn-small btn-primary' data-budget-action='goal-contribute' data-id='"+esc(goal.id)+"'>Contribute</button><button class='btn btn-small btn-ghost' data-budget-action='goal-form' data-id='"+esc(goal.id)+"'>Edit</button></div></div></article>";
+    }).join("")+"</div>":"<div class='empty-state'><strong>No savings goals</strong><div>Add a target amount and date; NEXUS will calculate the monthly savings needed automatically.</div></div>")+
   "</section>";
 }
 
@@ -522,7 +536,7 @@ function renderBudget(){
   if(!root)return;
   const snap=snapshot();
   root.innerHTML=
-    "<div class='view-header'><div><div class='eyebrow'>BUDGET</div><h1>Budget & Cash Flow</h1><p>Income and expenses cross-referenced with commitments, savings, category targets, and spending pace.</p></div><div class='actions'><button class='btn btn-secondary' data-budget-action='what-if'>What If?</button><button class='btn btn-secondary' data-budget-action='income-source-form'>Income Source</button><button class='btn btn-primary' data-budget-action='income-entry'>＋ Income</button></div></div>"+
+    "<div class='view-header'><div><div class='eyebrow'>BUDGET</div><h1>Budget & Cash Flow</h1><p>Income and expenses cross-referenced with your current balance, commitments, savings, category targets, and spending pace.</p></div><div class='actions'><button class='btn btn-secondary' data-budget-action='starting-balance'>¤ Balance</button><button class='btn btn-secondary' data-budget-action='what-if'>What If?</button><button class='btn btn-secondary' data-budget-action='income-source-form'>Income Source</button><button class='btn btn-primary' data-budget-action='income-entry'>＋ Income</button></div></div>"+
     summaryCards(snap)+
     "<div class='section-gap'>"+dailyReviewMarkup(snap)+"</div>"+
     "<div class='grid grid-2 section-gap'>"+cashFlowPlanMarkup(snap)+spendingClassMarkup(snap)+"</div>"+
@@ -553,6 +567,60 @@ function injectDashboardReview(){
 function formValue(form,name){ return form.elements[name]?form.elements[name].value:""; }
 
 function findById(list,id){return (list||[]).find(function(x){return x.id===id;});}
+
+function budgetSettings(){
+  return (S().data.budgetSettings || []).find(function(x){return x.id==="main";}) || (S().data.budgetSettings || [])[0] || {};
+}
+
+function timestampMillis(value){
+  if(!value)return 0;
+  if(typeof value.toMillis==="function")return value.toMillis();
+  if(typeof value.toDate==="function")return value.toDate().getTime();
+  const parsed=Date.parse(value);
+  return Number.isFinite(parsed)?parsed:0;
+}
+
+function currentTrackedBalance(){
+  const settings=budgetSettings();
+  if(settings.startingBalance == null || settings.startingBalance === "") return null;
+  let balance=Number(settings.startingBalance||0);
+  const capturedAt=timestampMillis(settings.balanceCapturedAt);
+  const balanceDate=settings.balanceDate||"";
+
+  S().data.transactions.forEach(function(row){
+    let include=false;
+    const createdAt=timestampMillis(row.createdAt);
+    if(capturedAt && createdAt) include=createdAt>capturedAt;
+    else if(balanceDate && row.date) include=String(row.date)>String(balanceDate);
+    if(!include)return;
+    const amount=Number(row.amount||0);
+    if(row.type==="income") balance+=amount;
+    else balance-=amount;
+  });
+  return balance;
+}
+
+function monthsUntilGoal(targetDate){
+  if(!targetDate)return 0;
+  const today=parseDate(todayISO());
+  const target=parseDate(targetDate);
+  const diffDays=Math.ceil((target-today)/86400000);
+  if(diffDays<=0)return 1;
+  return Math.max(1,Math.ceil(diffDays/30.4375));
+}
+
+function requiredMonthlyForGoal(goal){
+  if(!goal || !goal.targetDate)return 0;
+  const remaining=Math.max(0,Number(goal.targetAmount||0)-Number(goal.currentAmount||0));
+  if(remaining<=0)return 0;
+  return remaining/monthsUntilGoal(goal.targetDate);
+}
+
+function monthlyPlanForGoal(goal){
+  const mode=goal.savingsPlanMode || "recommended";
+  if(mode==="custom") return Math.max(0,Number(goal.monthlyContribution||0));
+  return requiredMonthlyForGoal(goal);
+}
 
 function openIncomeEntry(prefill){
   prefill=prefill||{};
@@ -692,24 +760,92 @@ function openCategoryForm(category){
 
 function openGoalForm(id){
   const existing=findById(S().data.savingsGoals,id)||{};
+  const defaultMode=existing.savingsPlanMode || "recommended";
   const body="<form id='savings-goal-form' class='form-grid'>"+
     "<div class='field full'><label>Goal</label><input name='name' required value='"+esc(existing.name||"")+"' placeholder='College fund, emergency savings…'></div>"+
     "<div class='field'><label>Target amount</label><input name='targetAmount' type='number' min='0' step='0.01' required value='"+esc(existing.targetAmount||"")+"'></div>"+
     "<div class='field'><label>Already saved</label><input name='currentAmount' type='number' min='0' step='0.01' value='"+esc(existing.currentAmount||"0")+"'></div>"+
-    "<div class='field'><label>Monthly contribution</label><input name='monthlyContribution' type='number' min='0' step='0.01' value='"+esc(existing.monthlyContribution||"")+"'></div>"+
     "<div class='field'><label>Target date</label><input name='targetDate' type='date' value='"+esc(existing.targetDate||"")+"'></div>"+
+    "<div class='field'><label>Savings plan</label><select name='savingsPlanMode'><option value='recommended' "+(defaultMode==="recommended"?"selected":"")+">Use NEXUS recommendation automatically</option><option value='custom' "+(defaultMode==="custom"?"selected":"")+">Use my own monthly amount</option></select></div>"+
+    "<div class='field full'><div id='goal-recommendation' class='goal-recommendation-card'></div></div>"+
+    "<div class='field full' id='goal-custom-field'><label>Custom monthly contribution</label><input name='monthlyContribution' type='number' min='0' step='0.01' value='"+esc(existing.monthlyContribution||"")+"'><div class='field-hint'>Only used when Savings plan is set to custom.</div></div>"+
     "<label class='check-row full'><input name='active' type='checkbox' "+(existing.active===false?"":"checked")+"> Active goal</label></form>";
   const modal=N().openModal(existing.id?"Edit Savings Goal":"Add Savings Goal",body,{footer:"<button class='btn btn-secondary' data-close-modal>Cancel</button>"+(existing.id?"<button class='btn btn-danger' id='delete-goal'>Delete</button>":"")+"<button class='btn btn-primary' id='save-goal'>Save Goal</button>"});
   const form=modal.querySelector("#savings-goal-form");
+
+  function recommendation(){
+    const temp={
+      targetAmount:Number(formValue(form,"targetAmount")||0),
+      currentAmount:Number(formValue(form,"currentAmount")||0),
+      targetDate:formValue(form,"targetDate")
+    };
+    const recommended=requiredMonthlyForGoal(temp);
+    const months=temp.targetDate?monthsUntilGoal(temp.targetDate):0;
+    const remaining=Math.max(0,temp.targetAmount-temp.currentAmount);
+    const panel=modal.querySelector("#goal-recommendation");
+    if(!temp.targetDate){
+      panel.innerHTML="<span>Monthly recommendation</span><strong>Choose a target date</strong><small>NEXUS needs a deadline to calculate how much to save each month.</small>";
+    }else if(remaining<=0){
+      panel.innerHTML="<span>Monthly recommendation</span><strong>"+money(0)+"/month</strong><small>This goal is already fully funded.</small>";
+    }else{
+      panel.innerHTML="<span>Monthly recommendation</span><strong>"+money(recommended)+"/month</strong><small>"+money(remaining)+" remaining across about "+months+" month"+(months===1?"":"s")+".</small>";
+    }
+    const custom=modal.querySelector("#goal-custom-field");
+    const customMode=formValue(form,"savingsPlanMode")==="custom";
+    custom.classList.toggle("hidden",!customMode);
+    form.elements.monthlyContribution.disabled=!customMode;
+  }
+  ["targetAmount","currentAmount","targetDate","savingsPlanMode"].forEach(function(name){
+    form.elements[name].addEventListener("input",recommendation);
+    form.elements[name].addEventListener("change",recommendation);
+  });
+  recommendation();
+
   modal.querySelector("#save-goal").addEventListener("click",async function(){
     if(!form.reportValidity())return;
-    const data={name:formValue(form,"name"),targetAmount:Number(formValue(form,"targetAmount")),currentAmount:Number(formValue(form,"currentAmount")),monthlyContribution:Number(formValue(form,"monthlyContribution")),targetDate:formValue(form,"targetDate"),active:form.elements.active.checked,updatedAt:serverTimestamp()};
+    const mode=formValue(form,"savingsPlanMode");
+    const temp={targetAmount:Number(formValue(form,"targetAmount")),currentAmount:Number(formValue(form,"currentAmount")),targetDate:formValue(form,"targetDate")};
+    const recommended=requiredMonthlyForGoal(temp);
+    const data={
+      name:formValue(form,"name"),targetAmount:temp.targetAmount,currentAmount:temp.currentAmount,
+      monthlyContribution:mode==="custom"?Number(formValue(form,"monthlyContribution")||0):recommended,
+      savingsPlanMode:mode,targetDate:temp.targetDate,active:form.elements.active.checked,updatedAt:serverTimestamp()
+    };
     if(existing.id)await updateDoc(doc(N().db,"savingsGoals",existing.id),data);
     else{data.createdAt=serverTimestamp();await addDoc(collection(N().db,"savingsGoals"),data);}
-    N().closeModal();await N().refresh(["savingsGoals"]);N().toast("Savings goal saved","Safe-to-spend now accounts for the planned monthly contribution.","success");
+    N().closeModal();await N().refresh(["savingsGoals"]);
+    N().toast("Savings goal saved",mode==="recommended"?"NEXUS will keep recalculating the monthly amount automatically.":"Your custom monthly savings amount will be used in the budget.","success");
   });
   const del=modal.querySelector("#delete-goal");
   if(del)del.addEventListener("click",async function(){if(!confirm("Delete this savings goal? Contribution history will remain."))return;await deleteDoc(doc(N().db,"savingsGoals",existing.id));N().closeModal();await N().refresh(["savingsGoals"]);});
+}
+
+function openStartingBalance(){
+  const settings=budgetSettings();
+  const current=currentTrackedBalance();
+  const body="<div class='inline-note'>Enter the amount of money you have <strong>right now</strong>. This becomes a new balance baseline. NEXUS will adjust it using transactions recorded after you save this snapshot, so old transactions are not counted twice.</div>"+
+    "<form id='starting-balance-form' class='form-grid section-gap'>"+
+      "<div class='field'><label>Current balance</label><input name='startingBalance' type='number' step='0.01' required value='"+esc(settings.startingBalance==null?"":settings.startingBalance)+"' placeholder='0.00'></div>"+
+      "<div class='field'><label>Snapshot date</label><input name='balanceDate' type='date' required value='"+esc(todayISO())+"'></div>"+
+      "<div class='field full'><label>Note</label><textarea name='balanceNote' maxlength='300' placeholder='Optional — checking + cash, current available balance, etc.'>"+esc(settings.balanceNote||"")+"</textarea></div>"+
+    "</form>"+
+    (current!=null?"<div class='goal-recommendation-card'><span>Currently tracked by NEXUS</span><strong>"+money(current)+"</strong><small>Saving a new snapshot resets the baseline to the amount above.</small></div>":"");
+  const modal=N().openModal(settings.id?"Update Current Balance":"Set Current Balance",body,{footer:"<button class='btn btn-secondary' data-close-modal>Cancel</button><button class='btn btn-primary' id='save-starting-balance'>Save Balance</button>"});
+  const form=modal.querySelector("#starting-balance-form");
+  modal.querySelector("#save-starting-balance").addEventListener("click",async function(){
+    if(!form.reportValidity())return;
+    const amount=Number(formValue(form,"startingBalance"));
+    try{
+      await setDoc(doc(N().db,"budgetSettings","main"),{
+        startingBalance:amount,balanceDate:formValue(form,"balanceDate"),balanceNote:formValue(form,"balanceNote"),
+        balanceCapturedAt:serverTimestamp(),updatedAt:serverTimestamp()
+      },{merge:true});
+      await N().writeActivity("budget","Balance baseline updated","budgetSettings","main","Current balance set to "+money(amount));
+      N().closeModal();
+      await N().refresh(["budgetSettings","activity"]);
+      N().toast("Current balance saved",money(amount)+" is now the NEXUS money-on-hand baseline.","success");
+    }catch(error){N().toast("Could not save balance",error.message||"Try again.","error");}
+  });
 }
 
 function openContribution(id){
@@ -731,6 +867,7 @@ function openDailyReview(){
   const snap=snapshot(),review=dailyReviewData(snap),cuts=cutbackOpportunities(snap),improvements=improvementSuggestions(snap);
   const body="<div class='budget-review-modal'>"+
     "<div class='grid grid-4'>"+
+      "<div class='insight'><div class='insight-label'>Balance</div><strong>"+(snap.trackedBalance==null?"Not set":money(snap.trackedBalance))+"</strong><p>Money on hand baseline</p></div>"+
       "<div class='insight'><div class='insight-label'>Income</div><strong>"+money(snap.actualIncome)+"</strong><p>"+money(snap.expectedIncome)+" expected</p></div>"+
       "<div class='insight'><div class='insight-label'>Expenses</div><strong>"+money(snap.actualExpenses)+"</strong><p>"+money(snap.projectedExpenses)+" projected</p></div>"+
       "<div class='insight'><div class='insight-label'>Safe today</div><strong>"+money(snap.safeDaily)+"</strong><p>"+money(Math.max(0,snap.remainingPool))+" remaining pool</p></div>"+
@@ -804,11 +941,11 @@ function openWhatIf(){
 }
 
 function handleAction(event){
-  const button=event.target.closest("[data-budget-action],[data-quick='add-income'],[data-quick='add-recurring'],[data-quick='add-savings-goal'],[data-quick='add-budget-target']");
+  const button=event.target.closest("[data-budget-action],[data-quick='add-income'],[data-quick='add-recurring'],[data-quick='add-savings-goal'],[data-quick='add-budget-target'],[data-quick='set-starting-balance']");
   if(!button)return;
   if(button.matches("[data-quick]")){
     const quick=button.dataset.quick;
-    if(["add-income","add-recurring","add-savings-goal","add-budget-target"].includes(quick)){
+    if(["add-income","add-recurring","add-savings-goal","add-budget-target","set-starting-balance"].includes(quick)){
       event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
       N().closeModal();
       setTimeout(function(){
@@ -816,6 +953,7 @@ function handleAction(event){
         if(quick==="add-recurring")openRecurringForm();
         if(quick==="add-savings-goal")openGoalForm();
         if(quick==="add-budget-target")openCategoryForm();
+        if(quick==="set-starting-balance")openStartingBalance();
       },0);
       return;
     }
@@ -824,6 +962,7 @@ function handleAction(event){
   if(!action)return;
   event.preventDefault();
   const id=button.dataset.id;
+  if(action==="starting-balance")openStartingBalance();
   if(action==="income-entry")openIncomeEntry();
   if(action==="income-source-form")openIncomeSourceForm(id);
   if(action==="record-source-payment"){
