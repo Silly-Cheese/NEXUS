@@ -290,6 +290,7 @@ function transactionEditor() {
     "<div class='inline-note'>Bulk transaction edits do not change the original receipt records linked to those transactions.</div>" +
     "<form id='bulk-edit-form' class='bulk-edit-form'>" +
       fieldToggle("category","Category","<select name='category'>" + categories.map(function(x){return option(x,x);}).join("") + "</select>") +
+      fieldToggle("spendingClass","Spending class","<select name='spendingClass'><option>Flexible</option><option>Discretionary</option><option>Fixed</option><option>One-time</option><option>Refundable</option></select>") +
       fieldToggle("type","Type","<select name='type'><option value='expense'>Expense</option><option value='income'>Income</option></select>") +
       fieldToggle("date","Date","<input name='date' type='date'>") +
       fieldToggle("note","Note","<div class='bulk-inline-grid'><select name='noteMode'><option value='append'>Append</option><option value='replace'>Replace</option><option value='clear'>Clear</option></select><textarea name='note'></textarea></div>") +
@@ -399,6 +400,7 @@ function patchForRecord(view, record, form) {
 
   if(view==="money"){
     if(enabled(form,"category")) patch.category=form.elements.category.value;
+    if(enabled(form,"spendingClass")) patch.spendingClass=form.elements.spendingClass.value;
     if(enabled(form,"type")) patch.type=form.elements.type.value;
     if(enabled(form,"date")) patch.date=form.elements.date.value;
     if(enabled(form,"note")) patch.note=applyTextMode(record.note,form.elements.note.value.trim(),form.elements.noteMode.value);
