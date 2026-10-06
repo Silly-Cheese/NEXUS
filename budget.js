@@ -826,7 +826,7 @@ function openStartingBalance(){
   const body="<div class='inline-note'>Enter the amount of money you have <strong>right now</strong>. This becomes a new balance baseline. NEXUS will adjust it using transactions recorded after you save this snapshot, so old transactions are not counted twice.</div>"+
     "<form id='starting-balance-form' class='form-grid section-gap'>"+
       "<div class='field'><label>Current balance</label><input name='startingBalance' type='number' step='0.01' required value='"+esc(settings.startingBalance==null?"":settings.startingBalance)+"' placeholder='0.00'></div>"+
-      "<div class='field'><label>Snapshot date</label><input name='balanceDate' type='date' required value='"+esc(todayISO())+"'></div>"+
+      "<div class='field'><label>Snapshot</label><input value='"+esc(N().dateText(todayISO()))+"' disabled></div>"+
       "<div class='field full'><label>Note</label><textarea name='balanceNote' maxlength='300' placeholder='Optional — checking + cash, current available balance, etc.'>"+esc(settings.balanceNote||"")+"</textarea></div>"+
     "</form>"+
     (current!=null?"<div class='goal-recommendation-card'><span>Currently tracked by NEXUS</span><strong>"+money(current)+"</strong><small>Saving a new snapshot resets the baseline to the amount above.</small></div>":"");
@@ -837,7 +837,7 @@ function openStartingBalance(){
     const amount=Number(formValue(form,"startingBalance"));
     try{
       await setDoc(doc(N().db,"budgetSettings","main"),{
-        startingBalance:amount,balanceDate:formValue(form,"balanceDate"),balanceNote:formValue(form,"balanceNote"),
+        startingBalance:amount,balanceDate:todayISO(),balanceNote:formValue(form,"balanceNote"),
         balanceCapturedAt:serverTimestamp(),updatedAt:serverTimestamp()
       },{merge:true});
       await N().writeActivity("budget","Balance baseline updated","budgetSettings","main","Current balance set to "+money(amount));
