@@ -3,9 +3,9 @@
    the existing Asset or Book creation form and saves there. */
 const PRODUCT_CATALOGS = [
   {name:"Open Food Facts",host:"world.openfoodfacts.org",kind:"Food"},
-  {name:"Open Beauty Facts",host:"world.openbeautyfacts.org",kind:"Beauty"},
-  {name:"Open Products Facts",host:"world.openproductsfacts.org",kind:"Products"},
-  {name:"Open Pet Food Facts",host:"world.openpetfoodfacts.org",kind:"Pet Food"}
+  {name:"Open Beauty Facts",host:"openbeautyfacts.org",kind:"Beauty"},
+  {name:"Open Products Facts",host:"openproductsfacts.org",kind:"Products"},
+  {name:"Open Pet Food Facts",host:"openpetfoodfacts.org",kind:"Pet Food"}
 ];
 const productCache = new Map();
 let preview = null;
@@ -211,7 +211,7 @@ async function resolveProduct(barcode,signal){
     })[0]||null;
   }
   if(!found && !signal.aborted)found=await lookUpUpc(barcode,signal);
-  if(!signal.aborted)productCache.set(barcode,found);
+  if(!signal.aborted && found)productCache.set(barcode,found);
   return found;
 }
 function displayProduct(product){
@@ -240,7 +240,7 @@ function displayProduct(product){
 function noMatch(barcode){
   currentProduct=null;
   updateStatus("<div class='np-empty'><span class='np-empty-symbol'>⌕</span><h3>No confirmed catalog match</h3>"+
-    "<p>We couldn't identify this barcode in the available databases. Some store-exclusive and newly released products are not indexed. You can still search the wider web.</p>"+
+    "<p>We couldn't identify this barcode in the available databases. Some store-exclusive and new products are not indexed, and a catalog may occasionally be unavailable. You can search the wider web.</p>"+
     "<div class='np-code-readout'>"+esc(barcode)+"</div>"+sourceLinks(barcode,null)+"</div>");
 }
 async function lookupCode(raw){
