@@ -318,3 +318,33 @@ Hourly Pay sources support:
 Logging hours only changes projected income. It does **not** change Current Balance until the actual paycheck is recorded as income.
 
 Hourly entries are stored in the owner-only `workHours` Firestore collection and are included in NEXUS JSON backup/restore.
+
+
+## Universal Product Preview (October 2026)
+
+From **Scan**, scan an ordinary UPC/EAN/GTIN barcode to open a **Product Preview**
+instead of automatically creating an Asset or searching the local NEXUS library.
+NEXUS QR labels continue through the existing owner tag workflow. Dedicated
+book-mode scans retain their ISBN cataloging workflow.
+
+You can also open **Quick Add → Product Preview** to type or camera-scan a barcode.
+The preview displays whichever details the catalog actually supplies, including
+product name, image, brand, size, category, barcode, description, and source.
+It has optional disclosure sections for ingredient/allergen information when
+available. The preview is **read-only**; looking up a product never silently
+adds a possession or expense. **Add to Assets** opens the existing editable asset
+form prefilled with the name, brand, barcode and source in the notes, while ISBN
+results offer **Catalog Book**. You must explicitly save in the destination form.
+
+The app queries several public Open Facts catalogs, Open Library for ISBNs,
+and the free UPCitemdb lookup when no previous catalog matches. Public APIs
+may impose daily quotas, omit store-exclusive items, block browser requests,
+or temporarily fail. **Search the web** and **Find shopping listings** open
+targeted external searches as fallback. This is not a universal commercial
+search index, and the preview does not claim live prices, inventory, or
+100-percent product coverage.
+
+All data comes from public third-party providers over HTTPS. The queried
+barcode is sent to them. A successful match is held in memory during the
+browser session to minimize repeated API use, not persisted to Firestore.
+Existing NEXUS account, security rules, records and PWA hosting remain unchanged.
