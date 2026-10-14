@@ -738,6 +738,7 @@ async function handleAction(action, el) {
   try {
     if (action === "quick-add") return openQuickAdd();
     if (action === "scan") return openScanner();
+    if (action === "product-lookup") return document.dispatchEvent(new CustomEvent("nexus:product-preview"));
     if (action === "add-transaction") return openTransactionForm();
     if (action === "edit-transaction") return openTransactionForm(state.data.transactions.find(function (x) { return x.id === el.dataset.id; }));
     if (action === "scan-receipt") return openReceiptScanner();
@@ -804,6 +805,7 @@ function locationOptions(selected, excludeId) {
 function openQuickAdd() {
   const body = "<div class='grid grid-2'>" +
     quickTile("scan-receipt", "▤", "Scan receipt", "Extract a purchase from paper") +
+    quickTile("product-lookup", "▦", "Product Preview", "Look up any retail barcode without saving") +
     quickTile("add-transaction", "◇", "Transaction", "Record spending manually") +
     quickTile("add-income", "↥", "Income", "Record money coming in") +
     quickTile("log-work-hours", "◷", "Work hours", "Add hours to an hourly pay period") +
@@ -1746,9 +1748,10 @@ function handleScan(decoded, mode) {
     const tag = u.searchParams.get("tag");
     if (tag) return openOwnerTag(tag);
   } catch (_) {}
-  const digits = text.replace(/[^0-9Xx]/g, "");
-  if ((digits.length === 10 || digits.length === 13) && (mode === "book" || /^97[89]/.test(digits) || digits.length === 10)) {
-    return openBookForm(null, digits);
+  const digits = text.replace(/[\s-]/g, "").toUpperCase();
+  if (mode === "book" && /^(?:97[89]\d{10}|\d{9}[\dX])$/.test(digits)) return openBookForm(null, digits);
+  if (/^(?:\d{8}|\d{9}[\dX]|\d{12,14})$/.test(digits)) {
+    return document.dispatchEvent(new CustomEvent("nexus:product-preview", { detail: { barcode: digits } }));
   }
   state.searchTerm = text;
   $("#global-search").value = text;
